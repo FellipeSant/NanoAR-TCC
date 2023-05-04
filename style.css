@@ -1,0 +1,47 @@
+/*---- GERAL ---------------------------------------------*/
+* {
+    margin: 0;
+    box-sizing: border-box;
+
+}
+:root{
+    --hub--: 270;
+    --body-bg-color: hsl(var(--hub--), 60%, 98%);
+    --purple: hsl(var(--hub--), 50%, 73%);
+
+
+    font-size: 62.5%; /* 1rem = 10px */
+}
+
+ul {
+    list-style: none;
+  }
+  
+
+html,
+body{
+
+    background-color: #123644;
+    width: 100%;
+    height: 100%;
+}
+
+p {
+
+    font-family: 'Poppins';
+    font-style: normal;
+    font-size: 1.6rem;
+    line-height: 2.4rem;
+    /* identical to box height */
+
+    text-align: center;
+
+    color: var(--purple);
+}
+
+header {
+    width: 41.4rem;
+    height: 89.6rem;
+    margin-right: auto;
+    margin-left: auto;
+}
