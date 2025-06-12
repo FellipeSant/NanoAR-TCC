@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NanoAR</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image.prod.js"></script>
-<script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image-aframe.prod.js"></script>
+<script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-aframe.prod.js"></script>
   
 
 </head>
 <body>
 
   <a-scene classe="DiamanteMolecula"
-    mindar-image="imageTargetSrc:./assets/diamanteMolecula.mind;"
+    mindar-image="imageTargetSrc:./assets/Diamante.mind;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
   >
@@ -27,11 +27,11 @@
     </a-assets>
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <a-entity mindar-image-target="targetIndex: 0">
+    <a-entity gltf-model="DiamanteMolecula" mindar-image-target="targetIndex: 0">
       <a-gltf-model
         rotation="90 15 0 "
         position="0 0 0"
-        scale="0.02 0.02 0.02"
+        scale="0.05 0.05 0.05"
         src="#DiamanteMolecula"
       ></a-gltf-model>
     </a-entity>

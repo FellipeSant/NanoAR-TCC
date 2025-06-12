@@ -6,32 +6,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NanoAR</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image.prod.js"></script>
-<script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image-aframe.prod.js"></script>
+<script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-aframe.prod.js"></script>
   
 
 </head>
 <body>
 
   <a-scene classe="GrafiteRocha"
-    mindar-image="imageTargetSrc:./assets/grafiteRocha.mind;"
+    mindar-image="imageTargetSrc:./assets/Grafiterocha.mind;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
   >
     <a-assets>
       <a-asset-item
         id="GrafiteRocha"
-        src="./image/graphite_rock.glb"
+        src="./image/graphite_schist_83_5-26-2020.glb"
       ></a-asset-item>
     </a-assets>
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <a-entity mindar-image-target="targetIndex: 0">
+    <a-entity gltf-model="GrafiteRocha" mindar-image-target="targetIndex: 0">
       <a-gltf-model
         rotation="90 15 0 "
         position="0 0 0"
-        scale="0.02 0.02 0.02"
+        scale="0.2 0.2 0.2"
         src="#GrafiteRocha"
       ></a-gltf-model>
     </a-entity>
