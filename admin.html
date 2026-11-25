@@ -22,6 +22,17 @@
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.min.js">
 </head>
 <body class="admin">
+  <section id="lock" class="screen" role="dialog" aria-modal="true" aria-labelledby="lock-title">
+    <form id="lock-form" class="screen-box">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="assets/icon.svg#logo"/></svg>
+      <h1 id="lock-title">Administração</h1>
+      <p>Digite a senha para mudar as cores das estruturas.</p>
+      <label class="sr-only" for="admin-pass">Senha</label>
+      <input id="admin-pass" class="pass" type="password" autocomplete="current-password" required placeholder="Senha">
+      <button class="btn btn-primary btn-lg" type="submit">Entrar</button>
+      <p id="lock-error" class="lock-error" role="alert"></p>
+    </form>
+  </section>
   <header class="admin-top">
     <a class="brand" href="./">
       <svg viewBox="0 0 64 64" aria-hidden="true"><use href="assets/icon.svg#logo"/></svg>
@@ -84,29 +95,41 @@
         <label class="slider"><span>Espessura</span><input id="bondRadius" type="range" step="0.01"><output id="bondRadiusOut"></output></label>
       </fieldset>
 
-      <div class="actions-grid">
-        <button id="test-btn" class="btn btn-primary btn-lg" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-          Testar na câmera
+      <section class="publish-box" aria-labelledby="pub-title">
+        <h2 id="pub-title">Publicar para todos</h2>
+        <p class="hint">Salva estas cores no site: em 1–2 minutos, todo mundo que escanear os QR codes vê as estruturas com as novas cores.</p>
+        <p id="gh-status" class="hint"></p>
+        <form id="gh-form" class="gh-form" hidden>
+          <label for="gh-token">Token do GitHub (só na primeira vez neste aparelho)</label>
+          <input id="gh-token" type="password" autocomplete="off" spellcheck="false" required placeholder="github_pat_…">
+          <button class="btn" type="submit">Salvar token neste aparelho</button>
+          <details>
+            <summary>Como criar o token</summary>
+            <ol>
+              <li>No GitHub: foto do perfil → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li>
+              <li>Em <b>Repository access</b>, escolha <b>Only select repositories</b> e marque só o repositório do site.</li>
+              <li>Em <b>Permissions → Repository permissions</b>, mude <b>Contents</b> para <b>Read and write</b>. Nada mais.</li>
+              <li>Gere, copie o token e cole aqui. Ele fica guardado só neste aparelho, protegido pela senha da administração.</li>
+            </ol>
+          </details>
+        </form>
+        <button id="publish-btn" class="btn btn-primary btn-lg" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+          Publicar para todos
         </button>
-        <button id="download-btn" class="btn" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
-          Baixar style.json
-        </button>
-        <button id="discard-btn" class="btn" type="button">Descartar teste deste aparelho</button>
-        <button id="reset-btn" class="btn" type="button">Voltar ao padrão</button>
-      </div>
+        <p id="publish-msg" class="publish-msg" role="status" aria-live="polite"></p>
+        <button id="gh-forget" class="link" type="button" hidden>Esquecer o token deste aparelho</button>
+      </section>
 
-      <details class="publish">
-        <summary>Como publicar as cores para todo mundo</summary>
-        <ol>
-          <li>Teste na câmera, com o cartaz, até gostar do resultado.</li>
-          <li>Toque em <b>Baixar style.json</b>.</li>
-          <li>No GitHub, abra o repositório <b>NanoAR-TCC</b> → pasta <b>config</b> → <b>Add file → Upload files</b>, envie o arquivo (substituindo o antigo) e clique em <b>Commit changes</b>.</li>
-          <li>Em alguns minutos, todos os celulares passam a usar as novas cores.</li>
-        </ol>
-        <p class="hint">O “Testar na câmera” muda as cores só neste aparelho; ninguém mais é afetado até o arquivo ser publicado.</p>
-      </details>
+      <div class="actions-grid">
+        <button id="test-btn" class="btn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          Testar só neste aparelho
+        </button>
+        <button id="discard-btn" class="btn" type="button">Descartar teste</button>
+        <button id="reset-btn" class="btn" type="button">Voltar ao padrão</button>
+        <button id="download-btn" class="btn" type="button">Baixar style.json</button>
+      </div>
     </section>
   </div>
 

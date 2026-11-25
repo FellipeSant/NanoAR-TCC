@@ -12,16 +12,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="site">
+  <a class="skip" href="#conteudo">Pular para o conteúdo</a>
   <div class="page">
     <header class="site-header">
       <a class="brand" href="./">
         <svg viewBox="0 0 64 64" aria-hidden="true"><use href="assets/icon.svg#logo"/></svg>
         NanoAR
       </a>
+      <button id="a11y-btn" class="btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4.5" r="1.8"/><path d="M5 8.5l7 1.5 7-1.5"/><path d="M12 10v5"/><path d="M8.5 21l3.5-6 3.5 6"/></svg>
+        Acessibilidade
+      </button>
     </header>
 
-    <main>
+    <main id="conteudo">
       <section class="hero">
         <div>
           <h1>O mundo do carbono em <em>realidade aumentada</em></h1>
@@ -73,12 +78,21 @@
           <div class="step"><span class="num">3</span><h3>Interaja</h3><p>Arraste para girar, use pinça para ampliar e toque na estrutura para ver como ela se forma.</p></div>
         </div>
       </section>
+
+      <section class="section" aria-labelledby="acess">
+        <h2 id="acess">Acessibilidade</h2>
+        <p>No botão <b>Acessibilidade</b> (aqui e na câmera): texto maior, alto contraste, leitura dos cartões em voz alta, menos movimento, botões para girar e ampliar sem gestos e tradução para Libras (VLibras).</p>
+      </section>
     </main>
 
     <footer class="site-footer">
-      <span>NanoAR · Trabalho de Conclusão de Curso</span>
+      <span>NanoAR · Um projeto do <a href="https://nano.ufop.br/" target="_blank" rel="noopener">Nanoscale Physics Group · UFOP</a></span>
       <span>A imagem da câmera é processada só no seu aparelho.</span>
     </footer>
   </div>
+  <script type="module">
+    import { mountA11yPanel } from './js/a11y.js';
+    mountA11yPanel({ openers: [document.getElementById('a11y-btn')] });
+  </script>
 </body>
 </html>

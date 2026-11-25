@@ -119,7 +119,8 @@ export function graphene({ nx = 9, ny = 5 } = {}) {
 
 // Grafite: camadas de grafeno com empilhamento AB (Bernal), deitadas (camada 0 embaixo).
 // Animação "peel" (esfoliação camada por camada): t vai de 0 até layers − 1;
-// cada unidade de t descola a camada de cima como uma fita adesiva. Sobra uma: o grafeno.
+// cada unidade de t descola a camada de cima como uma fita adesiva, na direção em que
+// a pessoa a joga (setDirection). Sobra uma: o grafeno.
 export function graphite({ nx = 7, ny = 4, layers = 5 } = {}) {
   const atoms = [];
   const mid = (layers - 1) / 2;
@@ -135,10 +136,24 @@ export function graphite({ nx = 7, ny = 4, layers = 5 } = {}) {
   s.animation = {
     kind: 'peel',
     maxT: layers - 1,
-    dir: 1, // +1: a camada sai para a direita; −1: para a esquerda (segue o dedo)
+    // Direção (no plano x–y da estrutura: x = de lado, y = para fora da pilha) em que a camada é jogada.
+    dir: { x: Math.SQRT1_2, y: Math.SQRT1_2 },
+    setDirection(x, y) {
+      const len = Math.hypot(x, y);
+      if (len < 1e-6) return;
+      x /= len;
+      y /= len;
+      if (y < 0.3) { // sempre um pouco para cima (para fora da pilha), nunca para dentro dela
+        y = 0.3;
+        x = (x < 0 ? -1 : 1) * Math.sqrt(1 - y * y);
+      }
+      this.dir = { x, y };
+    },
     frame(t, out, opacity) {
-      const d = this.dir < 0 ? -1 : 1;
-      const pivot = d > 0 ? minX : -maxX; // borda oposta ao lado para onde a camada vai (em x espelhado)
+      const d = this.dir.x < 0 ? -1 : 1; // jogar para a esquerda = espelhar a animação
+      const ux = Math.abs(this.dir.x), uy = this.dir.y;
+      const pivot = d > 0 ? minX : -maxX; // borda de trás (em x espelhado)
+      const fly = width * 1.5;
       // a pilha que sobra continua centralizada
       const recenter = (t * INTERLAYER) / 2;
       for (let g = 0; g < s.nGroups; g++) {
@@ -150,16 +165,18 @@ export function graphite({ nx = 7, ny = 4, layers = 5 } = {}) {
         const p = clamp01(t - (layers - 1 - g));
         let x = base[3 * i] * d, y = base[3 * i + 1];
         if (p > 0) {
-          // 1) a borda da frente levanta, girando em torno da borda de trás (como fita adesiva)
-          const ang = ease(clamp01(p / 0.55)) * 0.7;
+          // 1) a camada se solta: a borda da frente levanta girando em torno da borda de trás
+          //    (mais inclinada quanto mais de lado for o gesto; reto para cima, sobe "deitada")
+          const a = ease(clamp01(p / 0.55));
+          const ang = a * 0.75 * ux;
           const yl = (g - mid) * INTERLAYER;
           const dx = x - pivot, dy = y - yl;
           x = pivot + dx * Math.cos(ang) - dy * Math.sin(ang);
-          y = yl + dx * Math.sin(ang) + dy * Math.cos(ang);
-          // 2) a camada se solta e vai embora
+          y = yl + dx * Math.sin(ang) + dy * Math.cos(ang) + a * INTERLAYER * 0.8 * (1 - ux);
+          // 2) e sai voando na direção em que foi jogada
           const b = ease(clamp01((p - 0.45) / 0.55));
-          x += width * 1.1 * b;
-          y += INTERLAYER * 5 * b;
+          x += fly * ux * b;
+          y += fly * uy * b;
         }
         out[3 * i] = x * d;
         out[3 * i + 1] = y + recenter;

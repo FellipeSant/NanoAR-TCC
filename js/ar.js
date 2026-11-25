@@ -4,20 +4,18 @@ import { TARGETS, MAX_TRACK, findTarget } from './targets.js';
 import { Rig, setupLighting, attachGestures, pickRig } from './kit.js';
 import { Card } from './card.js';
 import { loadStyles, styleFor, hasLocalTest } from './style.js';
+import { mountA11yPanel, prefs, announce } from './a11y.js';
 
 const $ = (id) => document.getElementById(id);
 const DEBUG = new URLSearchParams(location.search).has('debug'); // ar.html?debug mostra detalhes no console
 const stage = $('stage');
 const scan = $('scan');
 const card = new Card({ card: $('card'), caption: $('caption') });
+mountA11yPanel({ openers: [$('a11y-btn'), $('a11y-start')], withControls: true });
 
-// Quem chegou por um QR code antigo (Pages/grafeno.html → ar.html#grafeno) vê o nome aqui
-// e o modelo correspondente começa a carregar antes.
+// Quem chegou por um QR code antigo (Pages/grafite.html → ar.html#grafite): o conteúdo daquele
+// QR code começa a carregar antes, mas nada é mostrado até a câmera reconhecê-lo.
 const hinted = findTarget(location.hash.slice(1));
-if (hinted && !hinted.placeholder) {
-  $('hint').hidden = false;
-  $('hint-name').textContent = hinted.name;
-}
 
 // Começa a baixar o motor de RA e os alvos enquanto a pessoa lê a tela inicial.
 const mindarReady = import('mindar-image-three');
@@ -75,7 +73,10 @@ async function loadTargets() {
 
 function showScreen(name) {
   for (const id of ['start', 'loading', 'error', 'help']) $(id).hidden = id !== name;
+  // leva o foco (teclado/leitor de tela) para o botão principal da tela que abriu
+  if (name) $(name).querySelector('button')?.focus();
 }
+document.addEventListener('keydown', (e) => e.key === 'Escape' && !$('help').hidden && showScreen(null));
 
 function fail(kind, err) {
   console.error(kind, err);
@@ -245,6 +246,27 @@ async function start() {
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
 
+  // acessibilidade: sem giro automático com "reduzir movimentos"; botões para girar/ampliar
+  const ctrl = $('ctrl');
+  $('card').insertBefore(ctrl, $('card').querySelector('.card-actions')); // fica dentro do cartão: nunca cobre nada
+  const syncA11y = () => {
+    for (const rig of rigs) rig.spinSpeed = prefs.reduceMotion ? 0 : 0.35;
+    ctrl.hidden = !(prefs.controls && active && isShown(active) && !active.cfg.placeholder);
+    stage.setAttribute('aria-label', active && isShown(active) ? `Imagem da câmera com o modelo 3D: ${active.info.name}` : 'Imagem da câmera');
+  };
+  window.addEventListener('nanoar:a11y', syncA11y);
+  ctrl.addEventListener('click', (e) => {
+    const act = e.target.closest('button')?.dataset.act;
+    const rig = active;
+    if (!act || !rig) return;
+    const s = rig.user.scale.x;
+    if (act === 'zoom-in') rig.user.scale.setScalar(Math.min(3.5, s * 1.25));
+    if (act === 'zoom-out') rig.user.scale.setScalar(Math.max(0.4, s / 1.25));
+    if (act === 'left') rig.user.rotation.y -= Math.PI / 8;
+    if (act === 'right') rig.user.rotation.y += Math.PI / 8;
+    rig.spinHold = 4;
+  });
+
   function play(rig) {
     const done = rig.play();
     refresh(rig);
@@ -256,13 +278,13 @@ async function start() {
     getRig: () => active,
     onDragStart: (e) => {
       const rig = pickRig(e, camera, renderer.domElement, rigs.filter(isShown));
-      const peel = rig?.beginPeel();
+      const peel = rig?.beginPeel(camera, renderer.domElement);
       if (!peel) return null;
       if (rig !== active) setActive(rig);
       return {
         move: peel.move,
-        end: (dx, vx) => {
-          peel.end(dx, vx).then(() => refresh(rig));
+        end: (...args) => {
+          peel.end(...args).then(() => refresh(rig));
           refresh(rig);
         },
       };
@@ -282,6 +304,7 @@ async function start() {
   }
 
   showScreen(null);
+  announce('Câmera aberta. Aponte para um QR code do cartaz.');
   scan.hidden = false;
   $('test-badge').hidden = !hasLocalTest();
   document.body.classList.add('running');
@@ -292,6 +315,8 @@ async function start() {
     const dt = Math.min(clock.getDelta(), 0.1);
     for (const rig of rigs) if (rig.content) rig.update(dt);
     scan.hidden = !!active || anchors.some((a) => a.tracked);
+    const showCtrl = !!(prefs.controls && active && isShown(active) && !active.cfg.placeholder);
+    if (ctrl.hidden === showCtrl) syncA11y();
     renderer.render(scene, camera);
   });
 }

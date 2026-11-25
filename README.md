@@ -5,6 +5,8 @@ QR codes do cartaz e veja grafite, nanotubo, fulereno, diamante e grafite natura
 
 Site: <https://fellipesant.github.io/NanoAR-TCC/>
 
+Um projeto do [Nanoscale Physics Group · UFOP](https://nano.ufop.br/).
+
 ## Como funciona
 
 - **Uma página só** ([ar.html](ar.html)) reconhece todos os QR codes do cartaz.
@@ -16,8 +18,8 @@ Site: <https://fellipesant.github.io/NanoAR-TCC/>
 - As estruturas de carbono são **geradas por código** ([js/structures.js](js/structures.js)) com a geometria
   real (ligação C–C de 1,42 Å, 0,335 nm entre camadas…). Por isso não há modelos 3D pesados para baixar
   e dá para animar átomo por átomo:
-  - **Grafite**: arraste a camada de cima para o lado (ou toque) para esfoliar camada por camada até o grafeno;
-    o cartão muda a cada camada.
+  - **Grafite**: deslize o dedo na diagonal, para cima, para jogar a camada de cima longe (ou toque) e
+    esfoliar camada por camada até o grafeno; a camada vai na direção do gesto e o cartão muda a cada camada.
   - **Nanotubo**: uma folha de grafeno se enrola no tubo.
   - **Fulereno**: um floco plano se curva e fecha no C₆₀.
 - Gestos: arrastar gira, pinça amplia/reduz, tocar anima.
@@ -33,12 +35,34 @@ Site: <https://fellipesant.github.io/NanoAR-TCC/>
 
 ### Cores (página de administração)
 
-Abra `https://fellipesant.github.io/NanoAR-TCC/admin.html` (não há link para ela no site):
+Abra `https://fellipesant.github.io/NanoAR-TCC/admin.html` (não há link para ela no site) e digite a senha.
 
-1. Escolha cores/tamanhos (para todas as estruturas ou só uma) — a prévia usa um fundo de QR code.
-2. **Testar na câmera**: as cores valem **só neste aparelho** (aparece o selo "Cores de teste").
-3. **Baixar style.json** e envie para a pasta `config/` do repositório (Add file → Upload files → Commit).
-   Em alguns minutos, todo mundo passa a ver as novas cores.
+- **A senha não está no repositório** (que é público): o código guarda só uma "impressão digital" dela
+  (hash PBKDF2 com sal, em [js/admin-auth.js](js/admin-auth.js)). A senha fica anotada só no computador do
+  administrador, em `SENHA-ADMIN.local.txt`, que o `.gitignore` impede de ir para o GitHub.
+  Para trocar: `python3 tools/admin_password.py`.
+- **Publicar para todos**: grava `config/style.json` no GitHub; em 1–2 minutos todos os celulares veem as
+  novas cores. Na primeira vez em cada aparelho, informe um **token do GitHub** (fine-grained, só este
+  repositório, permissão *Contents: Read and write*). Ele fica guardado só naquele aparelho, criptografado
+  com a senha — **nunca** coloque o token em arquivos do projeto.
+- **Testar só neste aparelho**: aplica as cores apenas no seu celular (aparece o selo "Cores de teste").
+- **Baixar style.json**: alternativa manual (enviar o arquivo para a pasta `config/` pelo GitHub).
+
+Como o site é estático, a senha só "tranca a porta" da página; o que impede mudanças indevidas é o token,
+que só existe nos aparelhos dos administradores.
+
+### Acessibilidade
+
+Botão **Acessibilidade** na página inicial e na câmera ([js/a11y.js](js/a11y.js)), com as escolhas salvas no aparelho:
+tamanho do texto (também com A−/A+ e pinça no cartão), alto contraste, reduzir movimentos, leitura dos cartões
+em voz alta (e botão "ouvir" em cada cartão), botões para girar e ampliar sem gestos e tradução para Libras
+(VLibras, carregado só quando pedido). Leitores de tela recebem avisos ("Grafite. 5 camadas."), os botões têm
+rótulos e o foco do teclado é visível.
+
+### Telas
+
+O layout se adapta sozinho: celulares estreitos, celulares, tablets e notebooks ajustam o tamanho de tudo;
+com a tela deitada (tablet, notebook ou celular deitado) o cartão vai para a lateral e a câmera fica livre.
 
 ## Estrutura
 
@@ -51,13 +75,16 @@ js/targets.js         configuração dos alvos e textos
 js/structures.js      geração das estruturas e animações
 js/kit.js             renderização (three.js), gestos, animações
 js/ar.js              página de RA (MindAR + leitura de QR code)
-js/admin.js, style.js página de administração e cores
+js/admin.js           página de administração (cores, publicar)
+js/admin-auth.js      senha (só o hash) e publicação no GitHub
+js/a11y.js            recursos de acessibilidade
+js/style.js           cores (publicadas / teste local)
 config/style.json     cores publicadas
 assets/targets.mind   alvos dos 6 QR codes juntos (+ .gz, metade do tamanho, usado pelo site)
 assets/targets/       alvos individuais (fonte para gerar o targets.mind)
 models/               grafite-rocha.glb + versões otimizadas dos modelos antigos
 models/original/      modelos 3D originais
-tools/                scripts de manutenção
+tools/                scripts de manutenção (alvos, modelos, senha do admin)
 ```
 
 ## Ferramentas

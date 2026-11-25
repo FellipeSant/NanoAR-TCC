@@ -61,6 +61,9 @@ function readLocal() {
 }
 
 export const getPublished = () => structuredClone(published);
+export const setPublished = (cfg) => {
+  published = normalize(cfg);
+};
 export const getLocal = () => (local ? structuredClone(local) : null);
 export const hasLocalTest = () => !!local;
 

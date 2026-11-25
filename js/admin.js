@@ -1,9 +1,10 @@
-// Página de administração: escolher cores/tamanhos, testar na câmera (só neste aparelho)
-// e baixar o config/style.json para publicar para todos.
+// Página de administração (protegida por senha): escolher cores/tamanhos, testar só neste
+// aparelho e publicar para todos (grava config/style.json no GitHub — ver js/admin-auth.js).
 import * as THREE from 'three';
 import { TARGETS, STYLE, findTarget } from './targets.js';
 import { Rig, setupLighting, attachGestures, pickRig } from './kit.js';
-import { loadStyles, getPublished, getLocal, saveLocal, clearLocal, styleFor, normalize, LIMITS } from './style.js';
+import { loadStyles, getPublished, setPublished, getLocal, saveLocal, clearLocal, styleFor, normalize, LIMITS } from './style.js';
+import { ADMIN, unlockAdmin } from './admin-auth.js';
 
 const PRESETS = [
   { name: 'Turquesa', atomColor: '#1fae9f', bondColor: '#8ea3ae' },
@@ -20,6 +21,7 @@ const chips = $('chips');
 const caption = $('caption');
 const playBtn = $('play-btn');
 
+const session = await unlockAdmin(); // nada abaixo roda sem a senha
 await loadStyles();
 let config = getLocal() || getPublished(); // cópia de trabalho
 let dirty = false;
@@ -107,9 +109,9 @@ for (const cfg of TARGETS.filter((t) => !t.placeholder)) {
 attachGestures(stage, {
   getRig: () => current,
   onDragStart: (e) => {
-    const peel = current && pickRig(e, camera, renderer.domElement, [current]) && current.beginPeel();
+    const peel = current && pickRig(e, camera, renderer.domElement, [current]) && current.beginPeel(camera, renderer.domElement);
     if (!peel) return null;
-    return { move: peel.move, end: (dx, vx) => peel.end(dx, vx).then(updatePlay) };
+    return { move: peel.move, end: (...args) => peel.end(...args).then(updatePlay) };
   },
   onTap: (e) => current && pickRig(e, camera, renderer.domElement, [current]) && play(),
 });
@@ -183,8 +185,8 @@ function updateStatus() {
   const local = getLocal();
   let text = local
     ? 'Teste ativo neste aparelho: a câmera aqui usa estas cores. Os outros celulares ainda usam as cores publicadas.'
-    : 'Mostrando as cores publicadas (config/style.json).';
-  if (dirty) text += ' Há mudanças ainda não testadas.';
+    : 'Mostrando as cores publicadas.';
+  if (dirty) text += ' Há mudanças ainda não publicadas.';
   $('status').textContent = text;
   $('status').classList.toggle('on', !!local);
   $('discard-btn').disabled = !local;
@@ -240,6 +242,70 @@ $('clear-own').addEventListener('click', () => {
   applyAll();
   updatePanel();
 });
+
+// ------------------------------------------------------------ publicar para todos (GitHub)
+function updateGithub() {
+  const { owner, repo, branch } = ADMIN.github;
+  const has = session.hasToken;
+  $('gh-status').textContent = has
+    ? `Token salvo neste aparelho. As cores serão gravadas em ${owner}/${repo} (${branch}).`
+    : 'Para publicar a partir deste aparelho, informe uma vez um token do GitHub.';
+  $('gh-form').hidden = has;
+  $('gh-forget').hidden = !has;
+  $('publish-btn').disabled = !has;
+}
+
+function publishMessage(text, kind) {
+  const el = $('publish-msg');
+  el.className = `publish-msg ${kind || ''}`;
+  el.textContent = text;
+}
+
+$('gh-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('gh-token');
+  publishMessage('Verificando o token…');
+  try {
+    await session.saveToken(input.value);
+    input.value = '';
+    publishMessage('Token salvo neste aparelho.', 'ok');
+  } catch (err) {
+    publishMessage(err.message, 'err');
+  }
+  updateGithub();
+});
+
+$('gh-forget').addEventListener('click', () => {
+  session.forgetToken();
+  publishMessage('Token apagado deste aparelho.');
+  updateGithub();
+});
+
+$('publish-btn').addEventListener('click', async () => {
+  if (!confirm('Publicar estas cores para todas as pessoas que usam os QR codes?')) return;
+  const btn = $('publish-btn');
+  btn.disabled = true;
+  publishMessage('Publicando…');
+  try {
+    const clean = normalize(config);
+    const link = await session.publish(JSON.stringify(clean, null, 2) + '\n');
+    setPublished(clean);
+    clearLocal(); // este aparelho volta a usar as cores publicadas (que agora são estas)
+    dirty = false;
+    updatePanel();
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    publishMessage(`Publicado às ${time}. Em 1–2 minutos, todos verão as novas cores.`, 'ok');
+    if (link) {
+      const a = Object.assign(document.createElement('a'), { href: link, target: '_blank', rel: 'noopener', textContent: ' Ver no GitHub' });
+      $('publish-msg').append(a);
+    }
+  } catch (err) {
+    publishMessage(err.message, 'err');
+    if (err.needToken && /inválido|expirou/.test(err.message)) session.forgetToken();
+  }
+  updateGithub();
+});
+updateGithub();
 
 $('test-btn').addEventListener('click', () => {
   saveLocal(config);
