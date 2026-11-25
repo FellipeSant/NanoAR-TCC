@@ -1,44 +1,84 @@
-<!DOCTYPE html>
-<html lang="pt-br">
+<!doctype html>
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>NanoAR</title>
-
-  <link rel="stylesheet" href="./style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NanoAR · Carbono em Realidade Aumentada</title>
+  <meta name="description" content="NanoAR: aponte a câmera do celular para os QR codes do cartaz e veja estruturas de carbono — grafeno, grafite, nanotubos, fulerenos e diamante — em 3D.">
+  <meta name="theme-color" content="#0a1a22">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300&display=swap" rel="stylesheet">
-
-  
-
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  
-  <img src="./image/em-manutencao.gif" alt="" style="display: block; margin-top: 5rem; margin-left: auto; margin-right: auto;">
-  <Div style="display: block; margin-left: 40rem; margin-right: auto; font-size: 1.6rem;
-  line-height: 2.4rem; color: aliceblue;">
-    <a href="./Pages/completo.html">Completo</a>
+  <div class="page">
+    <header class="site-header">
+      <a class="brand" href="./">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><use href="assets/icon.svg#logo"/></svg>
+        NanoAR
+      </a>
+    </header>
 
-    <a href="./Pages/diamanteMolecula.html">DiamanteMolecula</a>
-  
-    <a href="./Pages/fulereno.html">Fulereno</a>
-  
-    <a href="./Pages/grafeno.html">Grafeno</a>
-  
-    <a href="./Pages/grafite.html">Grafite</a>
-  
-    <a href="./Pages/grafiteRocha.html">GrafiteRocha</a>
-  
-    <a href="./Pages/microscopio.html">Microscopio</a>
-  
-    <a href="./Pages/microscopioDeTransmissao.html">MicroscopioDeTransmissao</a>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>O mundo do carbono em <em>realidade aumentada</em></h1>
+          <p>Aponte a câmera do celular para os QR codes do cartaz e veja, em 3D, como os mesmos átomos de carbono formam materiais tão diferentes quanto o grafite do lápis e o diamante.</p>
+          <div class="cta">
+            <a class="btn btn-primary btn-lg" href="ar.html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+              Abrir a câmera
+            </a>
+          </div>
+        </div>
 
-    <a href="./Pages/nanotubo.html">Nanotubo</a>
-  </Div>
-  
-  
+        <svg class="hero-art" viewBox="0 0 400 360" role="img" aria-label="Ilustração: celular apontado para um QR code, com uma rede hexagonal de carbono flutuando acima">
+          <defs>
+            <radialGradient id="glow" cx="50%" cy="40%" r="55%">
+              <stop offset="0" stop-color="#4fd1c5" stop-opacity="0.35"/>
+              <stop offset="1" stop-color="#4fd1c5" stop-opacity="0"/>
+            </radialGradient>
+            <g id="hex">
+              <path d="M0 -22 L19 -11 L19 11 L0 22 L-19 11 L-19 -11 Z" fill="none" stroke="#d7e1e7" stroke-width="3"/>
+              <g fill="#7f97a6"><circle cx="0" cy="-22" r="5"/><circle cx="19" cy="-11" r="5"/><circle cx="19" cy="11" r="5"/><circle cx="0" cy="22" r="5"/><circle cx="-19" cy="11" r="5"/><circle cx="-19" cy="-11" r="5"/></g>
+            </g>
+          </defs>
+          <ellipse cx="200" cy="150" rx="190" ry="150" fill="url(#glow)"/>
+          <g transform="translate(200 120) skewX(-12) scale(1 0.78)">
+            <use href="#hex" x="-38" y="0"/><use href="#hex" x="0" y="0"/><use href="#hex" x="38" y="0"/>
+            <use href="#hex" x="-19" y="33"/><use href="#hex" x="19" y="33"/>
+            <use href="#hex" x="-19" y="-33"/><use href="#hex" x="19" y="-33"/>
+          </g>
+          <g transform="translate(118 200)">
+            <rect x="0" y="0" width="164" height="150" rx="22" fill="#12303b" stroke="#2c5563" stroke-width="3"/>
+            <g stroke="#4fd1c5" stroke-width="5" fill="none" stroke-linecap="round">
+              <path d="M28 52 V34 H46"/><path d="M118 34 H136 V52"/><path d="M136 98 V116 H118"/><path d="M46 116 H28 V98"/>
+            </g>
+            <g fill="#eaf3f6">
+              <rect x="56" y="50" width="18" height="18" rx="2"/><rect x="90" y="50" width="18" height="18" rx="2"/>
+              <rect x="56" y="82" width="18" height="18" rx="2"/><rect x="80" y="74" width="8" height="8"/><rect x="94" y="86" width="8" height="8"/><rect x="100" y="74" width="8" height="8"/>
+            </g>
+          </g>
+        </svg>
+      </section>
+
+      <section class="section" aria-labelledby="como">
+        <h2 id="como">Como usar</h2>
+        <p>Funciona direto no navegador do celular — não precisa instalar nada.</p>
+        <div class="how">
+          <div class="step"><span class="num">1</span><h3>Abra a câmera</h3><p>Escaneie qualquer QR code do cartaz ou toque em “Abrir a câmera” e permita o acesso.</p></div>
+          <div class="step"><span class="num">2</span><h3>Aponte para o cartaz</h3><p>Uma única página reconhece todos os QR codes: mire em um deles e a estrutura aparece em 3D.</p></div>
+          <div class="step"><span class="num">3</span><h3>Interaja</h3><p>Arraste para girar, use pinça para ampliar e toque na estrutura para ver como ela se forma.</p></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>NanoAR · Trabalho de Conclusão de Curso</span>
+      <span>A imagem da câmera é processada só no seu aparelho.</span>
+    </footer>
+  </div>
 </body>
 </html>

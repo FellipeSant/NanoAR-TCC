@@ -1,42 +1,16 @@
-<!DOCTYPE html>
-<html lang="pt-br">
+<!doctype html>
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NanoAR</title>
-
-<script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-aframe.prod.js"></script>
-  
-
+  <!-- Endereço antigo (impresso nos QR codes do cartaz). Redireciona para a página única de RA. -->
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="../ar.html">
+  <meta http-equiv="refresh" content="0; url=../ar.html#grafiteRocha">
+  <script>location.replace('../ar.html#grafiteRocha');</script>
 </head>
-<body>
-
-  <a-scene classe="GrafiteRocha"
-    mindar-image="imageTargetSrc:./assets/Grafiterocha.mind;"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
-  >
-    <a-assets>
-      <a-asset-item
-        id="GrafiteRocha"
-        src="./image/graphite_schist_83_5-26-2020.glb"
-      ></a-asset-item>
-    </a-assets>
-
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <a-entity gltf-model="GrafiteRocha" mindar-image-target="targetIndex: 0">
-      <a-gltf-model
-        rotation="90 15 0 "
-        position="0 0 0"
-        scale="0.2 0.2 0.2"
-        src="#GrafiteRocha"
-      ></a-gltf-model>
-    </a-entity>
-  </a-scene>
-
-  
+<body style="background:#0a1a22;color:#eaf3f6;font-family:system-ui,sans-serif;text-align:center;padding:40px 16px">
+  <p>Abrindo o NanoAR… <a style="color:#4fd1c5" href="../ar.html#grafiteRocha">toque aqui</a> se não abrir.</p>
 </body>
 </html>

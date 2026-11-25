@@ -1,0 +1,9 @@
+{
+  "default": {
+    "atomColor": "#1fae9f",
+    "bondColor": "#8ea3ae",
+    "atomRadius": 0.36,
+    "bondRadius": 0.12
+  },
+  "structures": {}
+}

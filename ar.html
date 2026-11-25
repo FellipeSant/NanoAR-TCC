@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NanoAR · Realidade Aumentada</title>
+  <meta name="description" content="Aponte a câmera para os QR codes do cartaz NanoAR e veja estruturas de carbono em 3D.">
+  <meta name="theme-color" content="#0a1a22">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/",
+        "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+      }
+    }
+  </script>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.min.js">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js">
+  <link rel="preload" href="assets/targets.mind.gz" as="fetch" crossorigin>
+</head>
+<body>
+  <main class="app">
+    <div id="stage" class="app-stage"></div>
+
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="NanoAR — página inicial">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><use href="assets/icon.svg#logo"/></svg>
+        NanoAR
+      </a>
+      <div class="actions">
+        <a id="test-badge" class="badge-test" href="admin.html" hidden title="Cores de teste salvas pela página de administração">Cores de teste</a>
+        <button id="help-btn" class="icon-btn" type="button" aria-label="Como usar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="scan" class="scan" hidden>
+      <div class="scan-frame"><i></i><i></i><i></i><i></i><span class="scan-label">Aponte para um QR code do cartaz</span></div>
+    </div>
+    <div id="caption" class="caption" role="status" aria-live="polite" hidden></div>
+    <section id="card" class="card" aria-live="polite" hidden></section>
+  </main>
+
+  <!-- tela inicial -->
+  <section id="start" class="screen">
+    <div class="screen-box">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="assets/icon.svg#logo"/></svg>
+      <h1>NanoAR</h1>
+      <p>Estruturas de carbono em realidade aumentada</p>
+      <p id="hint" class="pill" hidden>Você escaneou: <b id="hint-name"></b></p>
+      <ol class="steps">
+        <li><span class="num">1</span><span>Toque em <b>Abrir câmera</b> e permita o acesso.</span></li>
+        <li><span class="num">2</span><span>Aponte para <b>qualquer QR code</b> do cartaz — esta página reconhece todos.</span></li>
+        <li><span class="num">3</span><span><b>Toque na estrutura</b> para ver a animação; use <b>pinça</b> para ampliar e arraste para girar.</span></li>
+      </ol>
+      <div class="stack">
+        <button id="start-btn" class="btn btn-primary btn-lg" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          Abrir câmera
+        </button>
+      </div>
+      <p class="small">A imagem da câmera é processada só no seu aparelho: nada é gravado ou enviado.</p>
+    </div>
+  </section>
+
+  <section id="loading" class="screen translucent" hidden>
+    <div class="screen-box">
+      <div class="spinner lg" style="margin: 0 auto"></div>
+      <p>Preparando a realidade aumentada…</p>
+    </div>
+  </section>
+
+  <section id="error" class="screen" hidden>
+    <div class="screen-box">
+      <h2>Algo deu errado</h2>
+      <p id="error-msg"></p>
+      <div class="stack">
+        <button id="retry-btn" class="btn btn-primary" type="button">Tentar de novo</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="help" class="screen translucent" hidden>
+    <div class="screen-box">
+      <h2>Como usar</h2>
+      <ol class="steps">
+        <li><span class="num">1</span><span>Aponte a câmera para um QR code do cartaz e espere a estrutura aparecer.</span></li>
+        <li><span class="num">2</span><span><b>Arraste</b> com um dedo para girar e use <b>pinça</b> para ampliar ou reduzir.</span></li>
+        <li><span class="num">3</span><span><b>Toque</b> no grafite, no nanotubo ou no fulereno para ver a animação.</span></li>
+        <li><span class="num">4</span><span>Boa luz e o QR code inteiro na tela ajudam o reconhecimento.</span></li>
+      </ol>
+      <button id="help-close" class="btn btn-primary" type="button">Entendi</button>
+    </div>
+  </section>
+
+  <script>
+    // O toque em "Abrir câmera" vale mesmo antes do código 3D terminar de baixar.
+    document.getElementById('start-btn').addEventListener('click', function () {
+      window.nanoarStartRequested = true;
+      document.getElementById('start').hidden = true;
+      document.getElementById('loading').hidden = false;
+    }, { once: true });
+  </script>
+  <script type="module" src="js/ar.js"></script>
+</body>
+</html>

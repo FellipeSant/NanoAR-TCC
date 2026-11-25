@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NanoAR · Administração</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0a1a22">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+      }
+    }
+  </script>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.min.js">
+</head>
+<body class="admin">
+  <header class="admin-top">
+    <a class="brand" href="./">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><use href="assets/icon.svg#logo"/></svg>
+      NanoAR
+    </a>
+    <span class="admin-title">Administração · cores das estruturas</span>
+  </header>
+
+  <div class="admin-layout">
+    <section class="admin-preview" aria-label="Pré-visualização">
+      <div id="stage" class="preview-stage bg-qr"></div>
+      <nav id="chips" class="preview-chips" aria-label="Estrutura"></nav>
+      <div id="caption" class="caption" role="status" aria-live="polite" hidden></div>
+      <div class="preview-bottom">
+        <div class="segmented" role="group" aria-label="Fundo da pré-visualização">
+          <button type="button" data-bg="qr" aria-pressed="true">QR code</button>
+          <button type="button" data-bg="dark" aria-pressed="false">Escuro</button>
+          <button type="button" data-bg="light" aria-pressed="false">Claro</button>
+        </div>
+        <button id="play-btn" class="btn btn-primary" type="button" hidden>
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
+          <span>Animar</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="admin-panel">
+      <p id="status" class="status"></p>
+
+      <div class="field">
+        <span class="label">Aplicar as mudanças a</span>
+        <div class="segmented wide" role="group" aria-label="Aplicar a">
+          <button type="button" data-scope="all" aria-pressed="true">Todas as estruturas</button>
+          <button type="button" data-scope="one" aria-pressed="false">Só <span id="scope-name">esta</span></button>
+        </div>
+        <p id="own-note" class="hint" hidden>Esta estrutura tem cores próprias. <button id="clear-own" class="link" type="button">Usar as cores gerais</button></p>
+        <p id="model-note" class="hint" hidden>O grafite natural é um modelo com textura de foto: as cores não se aplicam a ele.</p>
+      </div>
+
+      <div class="field">
+        <span class="label">Combinações prontas (boa visibilidade sobre o QR code)</span>
+        <div id="presets" class="presets"></div>
+      </div>
+
+      <fieldset class="group">
+        <legend>Átomos</legend>
+        <div class="row">
+          <label class="color"><input id="atomColor" type="color"><span>Cor</span></label>
+          <input id="atomColorHex" class="hex" type="text" inputmode="text" maxlength="7" aria-label="Cor dos átomos (hexadecimal)">
+        </div>
+        <label class="slider"><span>Tamanho</span><input id="atomRadius" type="range" step="0.01"><output id="atomRadiusOut"></output></label>
+      </fieldset>
+
+      <fieldset class="group">
+        <legend>Ligações</legend>
+        <div class="row">
+          <label class="color"><input id="bondColor" type="color"><span>Cor</span></label>
+          <input id="bondColorHex" class="hex" type="text" inputmode="text" maxlength="7" aria-label="Cor das ligações (hexadecimal)">
+        </div>
+        <label class="slider"><span>Espessura</span><input id="bondRadius" type="range" step="0.01"><output id="bondRadiusOut"></output></label>
+      </fieldset>
+
+      <div class="actions-grid">
+        <button id="test-btn" class="btn btn-primary btn-lg" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          Testar na câmera
+        </button>
+        <button id="download-btn" class="btn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+          Baixar style.json
+        </button>
+        <button id="discard-btn" class="btn" type="button">Descartar teste deste aparelho</button>
+        <button id="reset-btn" class="btn" type="button">Voltar ao padrão</button>
+      </div>
+
+      <details class="publish">
+        <summary>Como publicar as cores para todo mundo</summary>
+        <ol>
+          <li>Teste na câmera, com o cartaz, até gostar do resultado.</li>
+          <li>Toque em <b>Baixar style.json</b>.</li>
+          <li>No GitHub, abra o repositório <b>NanoAR-TCC</b> → pasta <b>config</b> → <b>Add file → Upload files</b>, envie o arquivo (substituindo o antigo) e clique em <b>Commit changes</b>.</li>
+          <li>Em alguns minutos, todos os celulares passam a usar as novas cores.</li>
+        </ol>
+        <p class="hint">O “Testar na câmera” muda as cores só neste aparelho; ninguém mais é afetado até o arquivo ser publicado.</p>
+      </details>
+    </section>
+  </div>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
