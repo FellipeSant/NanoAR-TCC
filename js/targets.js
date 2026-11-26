@@ -8,8 +8,9 @@
 //   page        página antiga para onde o QR code impresso aponta (Pages/<page>.html) — NÃO renomear
 //   name, tag, description, note   textos do cartão informativo (note = observação em itálico, opcional)
 //   facts       fatos curtos em "pílulas": [{ label: 'Ano', value: '2004' }, ...] (opcional)
+//   legend      legenda de cores: [{ color, colorName, label }, ...] (opcional; colorName é lido em voz alta)
 //   placeholder true = QR code reservado: mostra só o cartão "em breve", sem estrutura 3D
-//   structure   estrutura gerada por código (js/structures.js): graphene, graphite, nanotube, fullerene, diamond
+//   structure   estrutura gerada por código (js/structures.js): graphene, graphite, nanotube, fullerene, diamond, dna
 //   model       OU um arquivo .glb (ex.: 'models/grafite-rocha.glb'). Versões otimizadas dos modelos
 //               antigos estão em models/*.glb — para voltar a usá-las, troque `structure` por `model`.
 //   size        tamanho na tela, em larguras do QR code (1 = mesma largura do QR)
@@ -19,6 +20,9 @@
 //                 mode 'steps' : passo a passo (grafite: uma camada por toque); `stages` = cartão de cada passo
 //                 mode 'toggle': vai e volta; `after` = textos do estado final
 //                 mode 'story' : mostra a formação a partir do grafeno e termina na estrutura
+//                 mode 'stages': etapas, uma por toque (DNA → RNA → bases); cada etapa tem seus textos
+
+import { DNA_COLORS } from './structures.js';
 
 const GRAPHENE = {
   name: 'Grafeno',
@@ -69,15 +73,86 @@ export const TARGETS = [
     note: 'Em 2010, pesquisadores filmaram em um microscópio eletrônico flocos de grafeno se curvando e fechando em fulerenos.',
   },
   {
-    // QR code do grafeno: RESERVADO para uma nova molécula. Para usá-lo, troque `placeholder: true`
-    // por `structure: '...'` ou `model: 'models/....glb'` e escreva os textos (o `page` não muda).
-    id: 'reservado',
+    // QR code impresso como "grafeno" (o grafeno aparece no QR do grafite, ao descolar as camadas).
+    // Para trocar a molécula: mude `structure` (ou use `model: 'models/....glb'`) e os textos; o `page` não muda.
+    id: 'dna',
     page: 'grafeno',
-    placeholder: true,
-    name: 'Em breve: uma nova molécula',
-    tag: 'QR code reservado',
+    name: 'DNA',
+    tag: 'Ácido desoxirribonucleico · dupla hélice',
     description:
-      'Este QR code vai ganhar uma nova estrutura em breve. Enquanto isso, aponte para o QR code do grafite e toque nele: as camadas se separam até sobrar uma só — o grafeno!',
+      'Duas fitas enroladas uma na outra, como uma escada torcida. Os corrimãos são de açúcar (desoxirribose) e fosfato; os degraus são pares de bases, presos por ligações de hidrogênio (os traços finos): adenina sempre com timina (A–T, 2 ligações) e guanina sempre com citosina (G–C, 3 ligações). A ordem das bases guarda as instruções genéticas.',
+    legend: [
+      { color: DNA_COLORS.A, colorName: 'vermelho', label: 'Adenina (A)' },
+      { color: DNA_COLORS.T, colorName: 'verde', label: 'Timina (T)' },
+      { color: DNA_COLORS.G, colorName: 'azul', label: 'Guanina (G)' },
+      { color: DNA_COLORS.C, colorName: 'amarelo', label: 'Citosina (C)' },
+      { color: DNA_COLORS.P, colorName: 'laranja', label: 'Fósforo' },
+    ],
+    facts: [
+      { label: 'Dupla hélice', value: '1953' },
+      { label: 'Largura', value: '≈ 2 nm' },
+      { label: 'Uma volta', value: '≈ 10 pares · 3,4 nm' },
+    ],
+    note: 'O modelo da dupla hélice foi proposto em 1953 por James Watson e Francis Crick, a partir das imagens de difração de raios X de Rosalind Franklin e Raymond Gosling. Esticado, o DNA de uma única célula humana mede cerca de 2 metros.',
+    structure: 'dna',
+    size: 0.95,
+    tilt: 0,
+    animation: {
+      mode: 'stages',
+      tip: 'Toque no DNA para separar as fitas e formar o RNA',
+      // etapa 0 = os textos acima; `play` = como chegar na etapa: [fração do caminho, segundos, legenda]
+      stages: [
+        { action: 'Separar as fitas e formar o RNA' },
+        {
+          action: 'Separar as bases',
+          play: [
+            [0.6, 2.6, 'As ligações de hidrogênio se rompem e as fitas se separam…'],
+            [1, 2.2, 'T vira U e cada açúcar ganha um oxigênio: RNA!'],
+          ],
+          name: 'RNA',
+          tag: 'Ácido ribonucleico · uma fita',
+          description:
+            'Para usar uma instrução do DNA, a célula copia um trecho dele em RNA (a transcrição). O RNA tem uma fita só e duas diferenças: a uracila (U) no lugar da timina — é a mesma base sem o grupo CH₃ — e um oxigênio a mais em cada açúcar, que passa a ser a ribose.',
+          legend: [
+            { color: DNA_COLORS.A, colorName: 'vermelho', label: 'Adenina (A)' },
+            { color: DNA_COLORS.U, colorName: 'roxo', label: 'Uracila (U)' },
+            { color: DNA_COLORS.G, colorName: 'azul', label: 'Guanina (G)' },
+            { color: DNA_COLORS.C, colorName: 'amarelo', label: 'Citosina (C)' },
+            { color: DNA_COLORS.O2, colorName: 'branco', label: 'O a mais da ribose' },
+          ],
+          facts: [
+            { label: 'Bases', value: 'A, U, G, C' },
+            { label: 'Açúcar', value: 'ribose' },
+          ],
+          note: 'Simplificação: aqui uma das fitas vira RNA e mantém a forma de hélice. Na célula, a enzima RNA polimerase monta uma fita nova de RNA usando o DNA como molde (o DNA continua inteiro), e o RNA, sozinho, se dobra sobre si mesmo. Esse RNA mensageiro leva a receita até os ribossomos, que fabricam as proteínas.',
+        },
+        {
+          action: 'Voltar ao DNA',
+          still: true,
+          play: [
+            [0.3, 1.4, 'O esqueleto de açúcar e fosfato se desfaz…'],
+            [1, 2.6, 'As cinco bases: purinas em cima, pirimidinas embaixo'],
+          ],
+          name: 'As bases nitrogenadas',
+          tag: 'Purinas e pirimidinas',
+          description:
+            'São as “letras” do código genético. Em cima, as purinas, com dois anéis: adenina (A) e guanina (G). Embaixo, as pirimidinas, com um anel: citosina (C), timina (T, só no DNA) e uracila (U, só no RNA). Cada degrau do DNA junta uma purina e uma pirimidina, por isso todos têm a mesma largura.',
+          legend: [
+            { color: DNA_COLORS.A, colorName: 'vermelho', label: 'Adenina (A)' },
+            { color: DNA_COLORS.G, colorName: 'azul', label: 'Guanina (G)' },
+            { color: DNA_COLORS.C, colorName: 'amarelo', label: 'Citosina (C)' },
+            { color: DNA_COLORS.T, colorName: 'verde', label: 'Timina (T)' },
+            { color: DNA_COLORS.U, colorName: 'roxo', label: 'Uracila (U)' },
+          ],
+          facts: [
+            { label: 'DNA', value: 'A, T, G, C' },
+            { label: 'RNA', value: 'A, U, G, C' },
+          ],
+          note: 'Compare a timina e a uracila, lado a lado: a timina tem um grupo metil (CH₃) a mais. Aparecem só os átomos de carbono, nitrogênio e oxigênio; os hidrogênios foram omitidos.',
+        },
+      ],
+      back: [2.8, 'De volta à dupla hélice'],
+    },
   },
   {
     id: 'grafite',

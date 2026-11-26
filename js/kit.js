@@ -8,6 +8,7 @@ import { STYLE } from './targets.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const SPHERE = new THREE.SphereGeometry(1, 16, 12);
+const SPHERE_LOW = new THREE.SphereGeometry(1, 10, 8);
 const CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true);
 
 // Iluminação: mapa de ambiente gerado na hora (sem baixar imagens HDR) + uma luz direcional.
@@ -24,6 +25,8 @@ export function setupLighting(renderer, scene) {
 
 // Desenha átomos (esferas) e ligações (cilindros) com InstancedMesh:
 // duas chamadas de desenho por grupo, não importa quantos átomos.
+// Opcionais da estrutura: cores por átomo (colorIndex + palette), grupo de cada ligação (bondGroups),
+// ligações de hidrogênio finas (hbonds) e, na animação, palette(t) e zoom(t). Ver js/structures.js.
 export class StructureView extends THREE.Group {
   constructor(data, style = STYLE) {
     super();
@@ -31,6 +34,9 @@ export class StructureView extends THREE.Group {
     this.pos = data.positions.slice();
     this.opacity = new Float32Array(data.nGroups).fill(1);
     this.t = data.rest;
+    this.inner = new THREE.Group(); // recebe a ampliação da animação (zoom)
+    this.add(this.inner);
+    const sphere = data.positions.length / 3 > 400 ? SPHERE_LOW : SPHERE; // muitos átomos: esferas mais simples
     const atomMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.2 });
     const bondMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.05 });
     this.parts = [];
@@ -38,27 +44,55 @@ export class StructureView extends THREE.Group {
       const atoms = [];
       data.groups.forEach((gr, i) => gr === g && atoms.push(i));
       const bonds = [];
-      for (let b = 0; b < data.bonds.length; b += 2) if (data.groups[data.bonds[b]] === g) bonds.push(data.bonds[b], data.bonds[b + 1]);
-      const atomMesh = new THREE.InstancedMesh(SPHERE, atomMat.clone(), atoms.length);
+      for (let b = 0; b < data.bonds.length; b += 2) {
+        const bg = data.bondGroups ? data.bondGroups[b / 2] : data.groups[data.bonds[b]];
+        if (bg === g) bonds.push(data.bonds[b], data.bonds[b + 1]);
+      }
+      const atomMesh = new THREE.InstancedMesh(sphere, atomMat.clone(), atoms.length);
       const bondMesh = new THREE.InstancedMesh(CYLINDER, bondMat.clone(), bonds.length / 2);
       for (const m of [atomMesh, bondMesh]) {
         m.frustumCulled = false; // as instâncias se movem; a caixa da geometria base não vale
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        this.add(m);
+        this.inner.add(m);
       }
       this.parts.push({ atoms, bonds, atomMesh, bondMesh });
     }
+    if (data.hbonds?.length) {
+      // ligações de hidrogênio: traços finos e claros entre as bases
+      this.hbondMesh = new THREE.InstancedMesh(CYLINDER, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false }), data.hbonds.length / 2);
+      this.hbondMesh.frustumCulled = false;
+      this.hbondMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.inner.add(this.hbondMesh);
+    }
+    data.animation?.frame(this.t, this.pos, this.opacity); // estado inicial (ex.: grupos que só aparecem depois)
+    this.inner.scale.setScalar(data.animation?.zoom?.(this.t) ?? 1);
     this.applyStyle(style);
     this.radius = this.boundingRadius();
   }
 
   applyStyle(style) {
     this.style = { ...STYLE, ...style };
+    this.paletteKey = null; // refaz as cores por átomo (a cor do admin pode ter mudado)
     for (const part of this.parts) {
-      part.atomMesh.material.color.set(this.style.atomColor);
+      part.atomMesh.material.color.set(this.data.colorIndex ? 0xffffff : this.style.atomColor);
       part.bondMesh.material.color.set(this.style.bondColor);
     }
     this.update();
+  }
+
+  // cor de cada átomo: paleta da estrutura (null = cor escolhida no admin)
+  applyColors() {
+    const d = this.data;
+    if (!d.colorIndex) return;
+    const pal = d.animation?.palette?.(this.t) || d.palette;
+    const key = pal.join();
+    if (key === this.paletteKey) return;
+    this.paletteKey = key;
+    const c = new THREE.Color();
+    for (const part of this.parts) {
+      part.atoms.forEach((i, k) => part.atomMesh.setColorAt(k, c.set(pal[d.colorIndex[i]] ?? this.style.atomColor)));
+      if (part.atomMesh.instanceColor) part.atomMesh.instanceColor.needsUpdate = true;
+    }
   }
 
   boundingRadius() {
@@ -69,15 +103,31 @@ export class StructureView extends THREE.Group {
 
   setT(t) {
     this.t = t;
-    if (this.data.animation) this.data.animation.frame(t, this.pos, this.opacity);
+    if (this.data.animation) {
+      this.data.animation.frame(t, this.pos, this.opacity);
+      this.inner.scale.setScalar(this.data.animation.zoom?.(t) ?? 1);
+    }
     this.update();
   }
 
   update() {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
     const a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3();
-    const { atomRadius: ar, bondRadius: br } = this.style;
+    const thick = this.data.radiusScale ?? 1; // ex.: o DNA desenha átomos e ligações mais grossos
+    const ar = this.style.atomRadius * thick, br = this.style.bondRadius * thick;
     const p = this.pos;
+    this.applyColors();
+    // cilindro de `i` até `j`; `vis` (0–1) afina a ligação até sumir
+    const stick = (i, j, radius, maxLen, fadeLen) => {
+      a.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
+      b.set(p[3 * j], p[3 * j + 1], p[3 * j + 2]);
+      d.subVectors(b, a);
+      const len = d.length();
+      const vis = THREE.MathUtils.clamp((maxLen - len) / fadeLen, 0, 1);
+      q.setFromUnitVectors(UP, d.multiplyScalar(1 / (len || 1)));
+      s.set(radius * vis, len, radius * vis);
+      return m.compose(a.add(b).multiplyScalar(0.5), q, s);
+    };
     this.parts.forEach((part, g) => {
       const o = this.opacity[g];
       for (const mesh of [part.atomMesh, part.bondMesh]) {
@@ -94,22 +144,19 @@ export class StructureView extends THREE.Group {
         m.makeScale(ar, ar, ar).setPosition(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
         part.atomMesh.setMatrixAt(k, m);
       });
-      for (let k = 0; k < part.bonds.length; k += 2) {
-        const i = part.bonds[k], j = part.bonds[k + 1];
-        a.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
-        b.set(p[3 * j], p[3 * j + 1], p[3 * j + 2]);
-        d.subVectors(b, a);
-        const len = d.length();
-        // ligações muito esticadas (ex.: a "costura" do nanotubo ainda aberta) ficam invisíveis
-        const vis = THREE.MathUtils.clamp((2.15 - len) / 0.4, 0, 1);
-        q.setFromUnitVectors(UP, d.multiplyScalar(1 / (len || 1)));
-        s.set(br * vis, len, br * vis);
-        m.compose(a.add(b).multiplyScalar(0.5), q, s);
-        part.bondMesh.setMatrixAt(k / 2, m);
-      }
+      // ligações muito esticadas (ex.: a "costura" do nanotubo ainda aberta) ficam invisíveis
+      for (let k = 0; k < part.bonds.length; k += 2) part.bondMesh.setMatrixAt(k / 2, stick(part.bonds[k], part.bonds[k + 1], br, 2.15, 0.4));
       part.atomMesh.instanceMatrix.needsUpdate = true;
       part.bondMesh.instanceMatrix.needsUpdate = true;
     });
+    if (this.hbondMesh) {
+      const o = this.opacity[this.data.hbondGroup] ?? 1;
+      this.hbondMesh.visible = o > 0.01;
+      this.hbondMesh.material.opacity = 0.7 * o;
+      const h = this.data.hbonds;
+      for (let k = 0; k < h.length; k += 2) this.hbondMesh.setMatrixAt(k / 2, stick(h[k], h[k + 1], br * 0.4, 3.8, 0.5));
+      this.hbondMesh.instanceMatrix.needsUpdate = true;
+    }
   }
 }
 
@@ -279,11 +326,20 @@ export class Rig extends THREE.Group {
     return { total, remaining: total - Math.round(v.t) };
   }
 
+  // Modo 'stages' (DNA): em qual etapa a estrutura está (0, 1, 2…)
+  get stageIndex() {
+    const v = this.content?.view;
+    if (this.cfg.animation?.mode !== 'stages' || !v) return null;
+    return Math.min(this.cfg.animation.stages.length - 1, Math.max(0, Math.round(v.t)));
+  }
+
   // Textos atuais do cartão (mudam conforme a animação avança)
   get info() {
     const a = this.cfg.animation;
     const v = this.content?.view;
     if (a?.mode === 'toggle' && v && v.t > 0.5) return { ...this.cfg, ...a.after };
+    const k = this.stageIndex;
+    if (k) return { ...this.cfg, note: null, facts: null, legend: null, ...a.stages[k] };
     const layers = this.stack;
     if (layers) {
       const stage = a.stages?.find((s) => s.layers === layers.remaining);
@@ -297,6 +353,7 @@ export class Rig extends THREE.Group {
     if (!a || !this.content?.view) return null;
     if (a.mode === 'toggle') return this.content.view.t > 0.5 ? a.undo : a.action;
     if (a.mode === 'steps') return this.stack.remaining > 1 ? a.action : a.undo;
+    if (a.mode === 'stages') return a.stages[this.stageIndex].action;
     return a.action;
   }
 
@@ -313,6 +370,22 @@ export class Rig extends THREE.Group {
       const k = Math.round(v.t);
       return this.animator.play(k < max ? [{ from: v.t, to: k + 1, dur: 1.6 }] : [{ from: v.t, to: 0, dur: 2.2 }]);
     }
+    if (a.mode === 'stages') {
+      // a próxima etapa diz como chegar nela: [[fração do caminho, segundos, legenda], …]
+      const k = this.stageIndex;
+      if (k === a.stages.length - 1) {
+        const [dur, caption] = a.back;
+        return this.animator.play([{ from: v.t, to: 0, dur, caption }, { from: 0, to: 0, dur: 1.2, caption }]);
+      }
+      const segs = [];
+      let from = v.t;
+      for (const [frac, dur, caption] of a.stages[k + 1].play) {
+        segs.push({ from, to: k + frac, dur, caption });
+        from = k + frac;
+      }
+      segs.push({ from, to: from, dur: 1.6, caption: segs.at(-1).caption }); // a última legenda fica um pouco
+      return this.animator.play(segs);
+    }
     const [first, middle, last] = a.steps;
     const segs = [];
     if (v.t > 0.01) segs.push({ from: v.t, to: 0, dur: 1.0, caption: first });
@@ -327,7 +400,9 @@ export class Rig extends THREE.Group {
   update(dt) {
     this.animator?.update(dt);
     const r = this.spin.rotation.y;
-    if (this.busy) {
+    const k = this.stageIndex;
+    const still = k !== null && this.cfg.animation.stages[k].still; // ex.: as bases do DNA, de frente
+    if (this.busy || still) {
       // durante a animação, volta suavemente a ficar de frente
       const front = Math.round(r / (2 * Math.PI)) * 2 * Math.PI;
       this.spin.rotation.y += (front - r) * Math.min(1, dt * 4);

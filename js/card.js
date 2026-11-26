@@ -26,6 +26,7 @@ export class Card {
       <div class="card-body">
         <div class="card-layers" hidden><span class="card-layers-bar"></span><span class="card-layers-text"></span></div>
         <p class="card-desc"></p>
+        <ul class="card-legend" hidden aria-label="Cores"></ul>
         <ul class="card-facts" hidden></ul>
         <p class="card-note" hidden></p>
         <div class="card-loading" hidden><span class="spinner"></span><span>Carregando modelo 3D…</span></div>
@@ -42,6 +43,7 @@ export class Card {
     this.desc = $('.card-desc');
     this.note = $('.card-note');
     this.facts = $('.card-facts');
+    this.legend = $('.card-legend');
     this.layersEl = $('.card-layers');
     this.loading = $('.card-loading');
     this.playBtn = $('.card-play');
@@ -81,7 +83,8 @@ export class Card {
     if (!info) return '';
     const layers = this.rig.stack ? `${this.rig.stack.remaining} ${this.rig.stack.remaining === 1 ? 'camada' : 'camadas'}. ` : '';
     const facts = (info.facts || []).map((f) => `${f.label}: ${f.value}`).join('. ');
-    return [`${info.name}.`, layers, info.description, facts, info.note].filter(Boolean).join(' ');
+    const legend = info.legend?.length ? `Cores: ${info.legend.map((l) => `${l.label}, ${l.colorName}`).join('; ')}.` : '';
+    return [`${info.name}.`, layers, info.description, legend, facts, info.note].filter(Boolean).join(' ');
   }
 
   stopSpeech() {
@@ -129,6 +132,7 @@ export class Card {
   tipFor(rig) {
     if (rig.cfg.placeholder) return null;
     if (rig.cfg.animation?.mode === 'steps') return 'Deslize o dedo na diagonal, para cima, para jogar a camada de cima longe';
+    if (rig.cfg.animation?.tip) return rig.cfg.animation.tip;
     if (rig.cfg.animation) return 'Toque na estrutura para ver como ela se forma';
     return 'Arraste para girar · use dois dedos para ampliar';
   }
@@ -171,6 +175,17 @@ export class Card {
     this.facts.replaceChildren(...facts.map(({ label, value }) => {
       const li = document.createElement('li');
       li.append(Object.assign(document.createElement('span'), { textContent: label }), ' ', Object.assign(document.createElement('b'), { textContent: value }));
+      return li;
+    }));
+    // legenda das cores (ex.: as bases do DNA); o nome da cor vai para leitores de tela
+    const legend = info.legend || [];
+    this.legend.hidden = !legend.length;
+    this.legend.replaceChildren(...legend.map(({ color, label, colorName }) => {
+      const li = document.createElement('li');
+      const dot = Object.assign(document.createElement('i'), { title: colorName });
+      dot.style.background = color;
+      li.append(dot, Object.assign(document.createElement('span'), { textContent: label }));
+      li.setAttribute('aria-label', `${label}: ${colorName}`);
       return li;
     }));
     // contador de camadas (esfoliação passo a passo)

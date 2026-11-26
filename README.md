@@ -1,7 +1,7 @@
 # NanoAR
 
-Realidade aumentada no navegador com estruturas de carbono: aponte a câmera do celular para os
-QR codes do cartaz e veja grafite, nanotubo, fulereno, diamante e grafite natural em 3D.
+Realidade aumentada no navegador com estruturas de carbono e uma molécula de DNA: aponte a câmera do
+celular para os QR codes do cartaz e veja grafite, nanotubo, fulereno, diamante, grafite natural e DNA em 3D.
 
 Site: <https://fellipesant.github.io/NanoAR-TCC/>
 
@@ -22,8 +22,12 @@ Um projeto do [Nanoscale Physics Group · UFOP](https://nano.ufop.br/).
     esfoliar camada por camada até o grafeno; a camada vai na direção do gesto e o cartão muda a cada camada.
   - **Nanotubo**: uma folha de grafeno se enrola no tubo.
   - **Fulereno**: um floco plano se curva e fecha no C₆₀.
+  - **DNA** (no QR code impresso como "grafeno"): dupla hélice B com 16 pares de bases, montada átomo por
+    átomo (C, N, O e P; sem os hidrogênios). Cada toque avança uma etapa, e o cartão explica cada uma:
+    as fitas se separam e uma vira **RNA** (U no lugar de T e um O a mais em cada açúcar) → o esqueleto se
+    desfaz e as **bases** A, G, C, T e U ficam lado a lado → volta ao DNA. As cores das bases estão na legenda
+    do cartão.
 - Gestos: arrastar gira, pinça amplia/reduz, tocar anima.
-- O QR code do **grafeno** está **reservado** (mostra "em breve").
 
 ## Onde mudar cada coisa
 
@@ -31,7 +35,8 @@ Um projeto do [Nanoscale Physics Group · UFOP](https://nano.ufop.br/).
 |---|---|
 | Textos dos cartões, fatos, animações, tamanho/inclinação | [js/targets.js](js/targets.js) |
 | Cores e espessuras dos átomos e ligações | página `admin.html` → [config/style.json](config/style.json) |
-| Colocar uma molécula no QR code reservado (grafeno) | entrada `reservado` em [js/targets.js](js/targets.js): troque `placeholder: true` por `structure` ou `model: 'models/arquivo.glb'` |
+| Textos e etapas do DNA | entrada `dna` em [js/targets.js](js/targets.js) |
+| Sequência, cores das bases e animação do DNA | `dna()` e `DNA_COLORS` em [js/structures.js](js/structures.js) |
 
 ### Cores (página de administração)
 
@@ -77,6 +82,7 @@ admin.html            administração das cores (não listada)
 Pages/*.html          endereços antigos dos QR codes → redirecionam para ar.html
 js/targets.js         configuração dos alvos e textos
 js/structures.js      geração das estruturas e animações
+js/dna-templates.js   moldes dos nucleotídeos do DNA-B (gerado por tools/build_dna.py)
 js/kit.js             renderização (three.js), gestos, animações
 js/ar.js              página de RA (MindAR + leitura de QR code)
 js/admin.js           página de administração (cores, publicar)
@@ -102,6 +108,9 @@ gzip -9 -n -k -f assets/targets.mind
 
 # deixa modelos .glb leves (models/original/X.glb → models/X.glb)
 python tools/optimize_models.py
+
+# refaz js/dna-templates.js (precisa do Open Babel: sudo apt install openbabel)
+python3 tools/build_dna.py
 ```
 
 Para um QR code novo, compile a imagem dele no [compilador do MindAR](https://hiukim.github.io/mind-ar-js-doc/tools/compile),
