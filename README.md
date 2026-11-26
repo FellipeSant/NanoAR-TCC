@@ -42,14 +42,18 @@ Abra `https://fellipesant.github.io/NanoAR-TCC/admin.html` (não há link para e
   administrador, em `SENHA-ADMIN.local.txt`, que o `.gitignore` impede de ir para o GitHub.
   Para trocar: `python3 tools/admin_password.py`.
 - **Publicar para todos**: grava `config/style.json` no GitHub; em 1–2 minutos todos os celulares veem as
-  novas cores. Na primeira vez em cada aparelho, informe um **token do GitHub** (fine-grained, só este
-  repositório, permissão *Contents: Read and write*). Ele fica guardado só naquele aparelho, criptografado
-  com a senha — **nunca** coloque o token em arquivos do projeto.
+  novas cores. Os administradores só precisam da senha. Antes, **uma única vez**, quem cuida do site cola um
+  **token do GitHub** (fine-grained, só este repositório, permissão *Contents: Read and write*, com prazo de
+  validade) em "Liberar para todos os administradores": a página grava em `config/admin-key.json` apenas o
+  token **criptografado com a senha** (AES-GCM + PBKDF2). Quando o token vencer, ou se a senha for trocada,
+  basta liberar de novo — **nunca** coloque o token legível em arquivos do projeto.
 - **Testar só neste aparelho**: aplica as cores apenas no seu celular (aparece o selo "Cores de teste").
 - **Baixar style.json**: alternativa manual (enviar o arquivo para a pasta `config/` pelo GitHub).
 
-Como o site é estático, a senha só "tranca a porta" da página; o que impede mudanças indevidas é o token,
-que só existe nos aparelhos dos administradores.
+Como o site é estático, a segurança da publicação depende da força da senha: quem descobrir a senha consegue
+abrir o token. Por isso o token deve ter acesso só a este repositório (no pior caso, alguém mudaria arquivos do
+site, e o histórico do Git permite desfazer). Se a senha vazar: revogue o token no GitHub, troque a senha e
+libere de novo.
 
 ### Acessibilidade
 
@@ -111,6 +115,17 @@ python3 -m http.server 8000
 ```
 
 Abra <http://localhost:8000/>. A câmera funciona em `localhost` e em `https://` (GitHub Pages).
+
+## Testar no celular antes de publicar
+
+Câmera e giroscópio só funcionam em `https://`. Com o computador e o celular no mesmo Wi-Fi:
+
+```bash
+python3 tools/serve_https.py
+```
+
+Abra no celular o endereço que aparecer e aceite o aviso do certificado (é um certificado de teste).
+Enquanto estiver rodando, qualquer aparelho dessa rede consegue abrir o site; pare com Ctrl+C.
 `ar.html?debug` mostra no console qual QR code foi lido.
 
 Bibliotecas (via CDN, versões fixas): [three.js](https://threejs.org) r160 e MindAR 1.2.5; jsQR 1.4.0 só em

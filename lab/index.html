@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#000000">
+  <title>NanoAR · Laboratório (protótipo)</title>
+  <link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="lab.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+      }
+    }
+  </script>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.min.js">
+</head>
+<body class="lab">
+  <!-- Página sem link no site (protótipo do laboratório de realidade mista). -->
+  <div id="stage" class="lab-stage" hidden></div>
+  <button id="exit-btn" class="btn lab-exit" type="button" hidden>Sair</button>
+  <div id="rotate" class="lab-rotate" hidden>
+    <p>Deite o celular e coloque no óculos.</p>
+  </div>
+
+  <main id="menu" class="screen lab-menu">
+    <form id="menu-form" class="screen-box lab-box">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="../assets/icon.svg#logo"/></svg>
+      <h1>Laboratório NanoAR</h1>
+      <p>Protótipo: monte moléculas no espaço com as mãos, usando o celular e um óculos VR Box.</p>
+
+      <fieldset>
+        <legend>Ambiente</legend>
+        <div class="seg">
+          <label><input type="radio" name="env" value="mr"><span>Realidade mista<small>vê o ambiente pela câmera</small></span></label>
+          <label><input type="radio" name="env" value="vr"><span>Sala virtual<small>ambiente 3D</small></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Visualização</legend>
+        <div class="seg">
+          <label><input type="radio" name="view" value="box"><span>Óculos (VR Box)<small>tela dividida</small></span></label>
+          <label><input type="radio" name="view" value="screen"><span>Tela<small>sem óculos</small></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Interação (sem tocar na tela)</legend>
+        <label class="check"><input type="checkbox" id="opt-hands"><span><b>Mãos pela câmera</b><small>junte o polegar e o indicador para pegar</small></span></label>
+        <label class="check"><input type="checkbox" id="opt-gaze"><span><b>Olhar</b><small>olhe por 1 segundo para selecionar</small></span></label>
+        <label class="check"><input type="checkbox" id="opt-voice"><span><b>Voz</b><small id="voice-note">diga “carbono”, “oxigênio”, “limpar”, “frente”</small></span></label>
+      </fieldset>
+
+      <details class="lab-adjust">
+        <summary>Ajustes do óculos</summary>
+        <label class="range"><span>Distorção das lentes</span><input type="range" data-lens="k1" min="0" max="0.6" step="0.02"><output></output></label>
+        <label class="range"><span>Distância das lentes</span><input type="range" data-lens="lensShift" min="-0.12" max="0.12" step="0.01"><output></output></label>
+        <label class="range"><span>Campo de visão</span><input type="range" data-lens="fov" min="60" max="110" step="1"><output></output></label>
+        <label class="range"><span>Tamanho da câmera</span><input type="range" data-lens="camZoom" min="0.6" max="1.6" step="0.02"><output></output></label>
+        <label class="range"><span>Processamento das mãos</span>
+          <select id="opt-hands-proc">
+            <option value="auto">Automático</option>
+            <option value="CPU">Processador (CPU)</option>
+            <option value="GPU">Placa de vídeo (GPU)</option>
+          </select><output></output></label>
+        <button id="lens-reset" class="btn" type="button">Voltar ao padrão</button>
+      </details>
+
+      <button id="go" class="btn btn-primary btn-lg" type="submit">Entrar no laboratório</button>
+      <p id="menu-msg" class="lab-msg" role="status" aria-live="polite"></p>
+      <p class="small">Para sair: tire o celular do óculos e toque na tela.</p>
+
+      <section id="report" class="lab-report" hidden>
+        <h2>Resultado do último teste</h2>
+        <pre id="report-text"></pre>
+        <button id="copy-report" class="btn" type="button">Copiar resultado</button>
+      </section>
+    </form>
+  </main>
+
+  <script type="module" src="lab.js"></script>
+</body>
+</html>

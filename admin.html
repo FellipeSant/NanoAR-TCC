@@ -100,16 +100,18 @@
         <p class="hint">Salva estas cores no site: em 1–2 minutos, todo mundo que escanear os QR codes vê as estruturas com as novas cores.</p>
         <p id="gh-status" class="hint"></p>
         <form id="gh-form" class="gh-form" hidden>
-          <label for="gh-token">Token do GitHub (só na primeira vez neste aparelho)</label>
+          <label for="gh-token">Token do GitHub (uma única vez, por quem cuida do site)</label>
           <input id="gh-token" type="password" autocomplete="off" spellcheck="false" required placeholder="github_pat_…">
-          <button class="btn" type="submit">Salvar token neste aparelho</button>
+          <button class="btn" type="submit">Liberar para todos os administradores</button>
           <details>
             <summary>Como criar o token</summary>
             <ol>
               <li>No GitHub: foto do perfil → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b>.</li>
               <li>Em <b>Repository access</b>, escolha <b>Only select repositories</b> e marque só o repositório do site.</li>
               <li>Em <b>Permissions → Repository permissions</b>, mude <b>Contents</b> para <b>Read and write</b>. Nada mais.</li>
-              <li>Gere, copie o token e cole aqui. Ele fica guardado só neste aparelho, protegido pela senha da administração.</li>
+              <li>Em <b>Expiration</b>, escolha um prazo (ex.: 1 ano). Quando vencer, é só liberar de novo.</li>
+              <li>Gere, copie o token e cole aqui. Ele é guardado no site <b>criptografado com a senha</b> da administração: daí em diante, qualquer pessoa que entrar com a senha publica sem precisar de token.</li>
+              <li>Se a senha vazar, revogue o token no GitHub e troque a senha. Nunca use um token com acesso a outros repositórios.</li>
             </ol>
           </details>
         </form>

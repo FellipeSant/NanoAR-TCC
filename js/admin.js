@@ -246,13 +246,18 @@ $('clear-own').addEventListener('click', () => {
 // ------------------------------------------------------------ publicar para todos (GitHub)
 function updateGithub() {
   const { owner, repo, branch } = ADMIN.github;
-  const has = session.hasToken;
-  $('gh-status').textContent = has
-    ? `Token salvo neste aparelho. As cores serão gravadas em ${owner}/${repo} (${branch}).`
-    : 'Para publicar a partir deste aparelho, informe uma vez um token do GitHub.';
-  $('gh-form').hidden = has;
-  $('gh-forget').hidden = !has;
-  $('publish-btn').disabled = !has;
+  const src = session.source;
+  $('gh-status').textContent =
+    src === 'shared'
+      ? `Publicação liberada para os administradores: as cores serão gravadas em ${owner}/${repo} (${branch}).`
+      : src === 'device'
+        ? `Publicação liberada só neste aparelho. Para não pedir nada aos outros administradores, libere para todos abaixo.`
+        : session.sharedState === 'stale'
+          ? 'A senha da administração foi trocada depois que a publicação foi liberada: quem cuida do site precisa liberar de novo (uma vez).'
+          : 'A publicação ainda não foi liberada. Quem cuida do site faz isso uma única vez; depois, basta a senha.';
+  $('gh-form').hidden = src === 'shared';
+  $('gh-forget').hidden = src !== 'device';
+  $('publish-btn').disabled = !src;
 }
 
 function publishMessage(text, kind) {
@@ -264,11 +269,11 @@ function publishMessage(text, kind) {
 $('gh-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = $('gh-token');
-  publishMessage('Verificando o token…');
+  publishMessage('Verificando o token e liberando…');
   try {
-    await session.saveToken(input.value);
+    await session.shareToken(input.value);
     input.value = '';
-    publishMessage('Token salvo neste aparelho.', 'ok');
+    publishMessage('Pronto! Agora qualquer administrador que entrar com a senha pode publicar, sem token. (O site leva 1–2 minutos para atualizar.)', 'ok');
   } catch (err) {
     publishMessage(err.message, 'err');
   }
@@ -301,7 +306,10 @@ $('publish-btn').addEventListener('click', async () => {
     }
   } catch (err) {
     publishMessage(err.message, 'err');
-    if (err.needToken && /inválido|expirou/.test(err.message)) session.forgetToken();
+    if (err.needToken && /expirou|revogado/.test(err.message)) {
+      session.forgetToken();
+      session.dropShared();
+    }
   }
   updateGithub();
 });

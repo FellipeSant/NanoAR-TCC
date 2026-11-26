@@ -3,8 +3,9 @@
 
 Uso:
     python tools/admin_password.py            # pede a senha sem mostrar na tela
-Copie as três linhas impressas para o objeto ADMIN no início de js/admin.js.
-Atenção: trocar a senha faz o token do GitHub salvo nos aparelhos precisar ser informado de novo.
+Copie as três linhas impressas para o objeto ADMIN no início de js/admin-auth.js.
+Atenção: o token do GitHub guardado em config/admin-key.json está criptografado com a senha antiga;
+depois de trocar a senha, quem cuida do site precisa "Liberar para todos os administradores" de novo.
 """
 import getpass, hashlib, os, sys
 
