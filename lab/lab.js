@@ -10,7 +10,7 @@ import { Voice, voiceSupported } from './voice.js';
 import { Chem, RADIUS, BOND_LEN } from './chem.js';
 import { loadElements, PeriodicTable, elementLines } from './ptable.js';
 import { AtomView } from './atomview.js';
-import { loadIsotopes, initialState, describe, change, ionName } from './ions.js';
+import { loadIsotopes, initialState, describe, change, ionName, decay, canDecay, oxRange } from './ions.js';
 
 const $ = (id) => document.getElementById(id);
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -197,6 +197,7 @@ async function enter() {
       { words: ['colocar neutron', 'coloca neutron', 'adicionar neutron', 'mais neutron', 'por neutron'], run: () => voiceChange('n', 1) },
       { words: ['tirar eletron', 'tira eletron', 'remover eletron', 'menos eletron', 'arrancar eletron'], run: () => voiceChange('e', -1) },
       { words: ['colocar eletron', 'coloca eletron', 'adicionar eletron', 'mais eletron', 'por eletron'], run: () => voiceChange('e', 1) },
+      { words: ['deixar decair', 'decair', 'decaimento', 'decai'], run: () => voiceDecay() },
       // nomes mais longos primeiro (evita confundir nomes parecidos)
       ...[...S.elements].sort((x, y) => y.words[0].length - x.words[0].length).map((el) => ({ words: el.words, run: () => spawn(el) })),
       { words: ['limpar', 'apagar'], run: clearAtoms },
@@ -232,7 +233,7 @@ async function enter() {
   renderer.setAnimationLoop(() => frame(Math.min(clock.getDelta(), 0.1)));
   if (DEBUG) {
     window.__lab = S;
-    S.debug = { clear: clearAtoms, spawn: (sym) => spawn(S.elements.find((e) => e.sym === sym)), open: (i) => toggleOpen(S.atoms[i]), change: (i, what, d) => changeAtom(S.atoms[i], what, d) }; // atalhos para testes
+    S.debug = { clear: clearAtoms, spawn: (sym, opts) => spawn(S.elements.find((e) => e.sym === sym), { fromTable: false, ...opts }), open: (i) => toggleOpen(S.atoms[i]), change: (i, what, d) => changeAtom(S.atoms[i], what, d), decay: (i) => decayAtom(S.atoms[i]) }; // atalhos para testes
   }
 }
 
@@ -319,8 +320,9 @@ function buildScene(S) {
   // e pode ser arrastado pela borda.
   // tabela periódica completa (curvada), com alça para arrastar e botão de minimizar
   const pt = new PeriodicTable(S.elements, {
-    onSelect: (el) => {
-      spawn(el);
+    // o átomo sai de dentro do quadradinho dele (como de uma caixinha); com a pinça, já sai na mão
+    onSelect: (el, source) => {
+      spawn(el, { slot: source === 'mão' ? S.selectingSlot : null });
       showCard(el);
     },
     onHover: (el) => showCard(el),
@@ -384,10 +386,14 @@ function buildScene(S) {
     fill.renderOrder = 1002;
     reticle.add(outline, rim, fill);
     ray.renderOrder = 998;
-    g.add(beams.group, ray, reticle);
+    // halo amarelo na partícula que a mão vai pegar (elétron da camada externa ou o núcleo)
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffd400, opacity: 0.35, ...onTop }));
+    halo.renderOrder = 990;
+    halo.visible = false;
+    g.add(beams.group, ray, reticle, halo);
     g.visible = false;
     scene.add(g);
-    return { g, beams, ray, reticle, rim, fill, dir: null, depth: 0.4, wasPinching: false, grab: null, hover: null, flash: 0 };
+    return { g, beams, ray, reticle, rim, fill, halo, dir: null, depth: 0.4, wasPinching: false, grab: null, hover: null, flash: 0 };
   });
   S.handRay = new THREE.Raycaster();
 
@@ -400,29 +406,46 @@ function buildScene(S) {
       flash(b, 0x4fd1c5);
       buzz(25);
       const canMore = order < 3 && S.chem.free(a) > 0 && S.chem.free(b) > 0;
-      // tipo de ligação pela diferença de eletronegatividade (Pauling)
+      // tipo de ligação pela diferença de eletronegatividade (Pauling); as iônicas passam por onTransfer
       const dEn = a.el.en != null && b.el.en != null ? Math.abs(a.el.en - b.el.en) : null;
-      if (dEn != null && dEn > 1.7) {
-        const [cat, an] = a.el.en < b.el.en ? [a, b] : [b, a];
-        toast(`Ligação iônica: ${cat.el.sym}⁺ ${an.el.sym}⁻ (diferença de eletronegatividade ${dEn.toFixed(1).replace('.', ',')})`);
-      } else {
-        const kind = dEn == null ? '' : dEn < 0.4 ? ' covalente apolar' : ' covalente polar';
-        toast(`Ligação${kind} ${['', 'simples', 'dupla', 'tripla'][order]}: ${a.el.sym}${['', '–', '=', '≡'][order]}${b.el.sym}${canMore ? ` · pince a ligação para fazê-la ${order === 1 ? 'dupla' : 'tripla'}` : ''}`);
-      }
+      const kind = dEn == null ? '' : dEn < 0.4 ? ' covalente apolar' : ' covalente polar';
+      toast(`Ligação${kind} ${['', 'simples', 'dupla', 'tripla'][order]}: ${a.el.sym}${['', '–', '=', '≡'][order]}${b.el.sym}${canMore ? ` · pince a ligação para fazê-la ${order === 1 ? 'dupla' : 'tripla'}` : ''}`);
     },
+    // ligação iônica: o metal passou k elétrons para o não metal (os elétrons voam de um para o outro)
+    onTransfer: (m, x, k) => {
+      for (const sl of S.handSlots) if (sl.grab && (sl.grab.obj === m.obj || sl.grab.obj === x.obj)) sl.grab.dist = Math.max(0.3, sl.grab.dist - 0.17);
+      for (let i = 0; i < k; i++) flyElectron(m, x, i * 0.18);
+      syncIon(m);
+      syncIon(x);
+      buzz([15, 30, 15]);
+      const dEn = (x.el.en - m.el.en).toFixed(1).replace('.', ',');
+      ionicToast(m, x, `${m.el.name} passou ${k === 1 ? '1 elétron' : `${k} elétrons`} para o ${x.el.name.toLowerCase()} (diferença de eletronegatividade ${dEn}): ${ionName(m.el, m.charge)} e ${ionName(x.el, x.charge)} se atraem — ligação iônica`);
+    },
+    // íons de cargas opostas se encontraram (atraídos ou levados pela mão)
+    onIonic: (a, b) => {
+      flash(a, 0xffd400);
+      flash(b, 0xffd400);
+      buzz(20);
+      ionicToast(a, b, `${ionName(a.el, a.charge)} e ${ionName(b.el, b.charge)}: cargas opostas se atraem — ligação iônica`);
+    },
+    oxRange,
     onRepel: (a, b) => {
       const stable = S.chem.free(a) === 0 ? a : b;
       flash(b, 0xff3b3b);
       buzz([20, 40, 20]);
       const n = stable.el.valence;
-      if (stable.charge) toast(`${ionName(stable.el, stable.charge)} é um íon: no laboratório, por enquanto, só átomos neutros fazem ligações`, true);
+      const ion = a.charge ? a : b.charge ? b : null;
+      if (a.charge && b.charge && a.charge * b.charge > 0) toast(`Cargas iguais se repelem: ${ionName(a.el, a.charge)} e ${ionName(b.el, b.charge)}`, true);
+      else if (a.charge && b.charge) toast(`${ionName(a.el, a.charge)} e ${ionName(b.el, b.charge)} já estão com as cargas compensadas`, true);
+      else if (ion && S.chem.transferLeft(ion) === 0) toast(`${ionName(ion.el, ion.charge)} é um íon: ele se liga a íons de carga oposta (ligação iônica), não a átomos neutros`, true);
+      else if (ion) toast(`${ionName(ion.el, ion.charge)} e ${(ion === a ? b : a).el.name.toLowerCase()} não têm elétron para trocar`, true);
       else if (n == null) toast(`As ligações do ${stable.el.name.toLowerCase()} ainda não são simuladas no laboratório`, true);
       else if (n === 0) toast(`${stable.el.name} é um gás nobre: já é estável e não faz ligações`, true);
       else toast(`${stable.el.name} já tem ${n} ${n === 1 ? 'ligação' : 'ligações'}: está estável`, true);
     },
-    onBreak: () => {
+    onBreak: (a, b, ionic) => {
       buzz(15);
-      toast('Ligação desfeita');
+      toast(ionic ? `Ligação iônica desfeita: ${ionName(a.el, a.charge)} e ${ionName(b.el, b.charge)} continuam íons` : 'Ligação desfeita');
     },
     onSettle: (a, b, k) => {
       b.obj.userData.flash = { color: 0x4fd1c5, t: 0.25 * k + 0.05 };
@@ -432,6 +455,9 @@ function buildScene(S) {
   scene.add(S.bondGroup);
   S.stick = { geo: new THREE.CylinderGeometry(0.009, 0.009, 1, 10, 1, true), hitGeo: new THREE.CylinderGeometry(0.035, 0.035, 1, 8, 1), mat: new THREE.MeshStandardMaterial({ color: 0xdfe7ea, roughness: 0.5 }) };
   S.bondViews = [];
+  S.electronFlyers = [];
+  S.loose = []; // partículas soltas (puxadas com a mão) voltando, entrando num átomo ou escapando
+  S.twoHand = null; // zoom com as duas mãos
   S.molLabels = [];
   S.manips = [];
   S.zoom = false;
@@ -540,19 +566,28 @@ function persistLens() {
 }
 
 // ------------------------------------------------------------ átomos (teste de pegar/mover)
-function spawn(el) {
-  if (!S) return;
-  const q = S.head.quaternion;
-  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+// lugar livre na "bancada", abaixo da tabela (não tampa os elementos de baixo)
+function benchSpot(except = null) {
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(S.head.quaternion);
   fwd.y = 0;
   fwd.normalize();
+  const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+  const spots = [0, 1, -1, 2, -2, 3, -3].flatMap((i) => [-0.36, -0.5].map((y) => fwd.clone().multiplyScalar(0.65).addScaledVector(right, i * 0.15).setY(y)));
+  const at = (a) => a.userData.emerge?.to ?? a.position; // quem ainda está voando já tem lugar reservado
+  return (spots.find((p) => S.atoms.every((a) => a === except || at(a).distanceTo(p) > 0.16)) || spots[0]).clone();
+}
+
+// O átomo sai de dentro do quadradinho do elemento na tabela (fromTable): cresce saindo da "caixinha"
+// e voa até a bancada — ou, se uma mão pinçou o quadradinho (slot), já sai preso na pinça.
+function spawn(el, { fromTable = true, slot = null } = {}) {
+  if (!S) return;
   const atom = new THREE.Group();
   const ball = new THREE.Mesh(new THREE.SphereGeometry(RADIUS, 32, 20), new THREE.MeshStandardMaterial({ color: el.color, roughness: 0.35, metalness: 0.1 }));
   // rótulo: símbolo, ou o isótopo/íon depois de mexer no átomo aberto (ex.: ¹⁴C, Na⁺)
   const label = new CanvasPanel(0.11, 0.07, {
     px: 200,
     draw: (ctx, w, h) => {
-      const text = atom.userData.tag || el.sym;
+      const text = atom.userData.tag || (atom.userData.element || el).sym; // o elemento muda se o núcleo decair
       let size = 96;
       ctx.font = font(size, 700);
       while (ctx.measureText(text).width > w - 12 && size > 40) ctx.font = font((size -= 4), 700);
@@ -567,19 +602,45 @@ function spawn(el) {
   });
   label.position.y = 0.085;
   atom.add(ball, label);
-  // aparece num lugar livre, numa bancada abaixo da tabela (não tampa os elementos de baixo)
-  const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-  const spots = [0, 1, -1, 2, -2, 3, -3].flatMap((i) => [-0.36, -0.5].map((y) => fwd.clone().multiplyScalar(0.65).addScaledVector(right, i * 0.15).setY(y)));
-  atom.position.copy(spots.find((p) => S.atoms.every((a) => a.position.distanceTo(p) > 0.16)) || spots[0]);
+  const bench = benchSpot();
+  let tile = null;
+  if (fromTable && S.ptable && el.data?.row != null && isShown(S.ptable)) {
+    S.ptable.updateWorldMatrix(true, false);
+    tile = S.ptable.localToWorld(S.ptable.tilePosition(el).position);
+    tile.multiplyScalar(1 - 0.03 / tile.length()); // 3 cm à frente da tabela
+  }
+  atom.position.copy(tile || bench);
   atom.userData = { selectable: true, grabbable: true, element: el, label, ball, hovered: false, state: initialState(el), tag: null, onSelect: () => toggleOpen(atom), setHover: (v) => {
     atom.userData.hovered = v;
     if (v && atom.userData.view && S.lastOpen !== atom) setActiveOpen(atom); // apontar para um átomo aberto mostra o cartão dele
   } };
+  if (tile) {
+    atom.userData.grow = 0.2; // sai pequenininho da caixinha e cresce
+    if (slot) slot.grab = { obj: atom, dist: tile.length(), dist0: tile.length(), offset: new THREE.Vector3(), depth0: slot.depth, t0: performance.now(), dir0: slot.dir.clone(), fromTable: tile.clone() };
+    else atom.userData.emerge = { from: tile, to: bench, t: 0, dur: 0.75 };
+  }
   S.scene.add(atom);
   S.chem.add(atom, el);
   S.atoms.push(atom);
   S.selectables.push(atom);
   if (S.atoms.length > 16) removeAtom(S.atoms[0]);
+}
+
+// saindo da caixinha: cresce e (se não foi a mão que pegou) voa em arco até a bancada
+function updateEmerging(S, dt) {
+  for (const atom of S.atoms) {
+    const u = atom.userData;
+    if (u.grow != null) {
+      u.grow = Math.min(1, u.grow + dt / 0.35);
+      if (u.grow === 1) u.grow = null;
+    }
+    const e = u.emerge;
+    if (!e) continue;
+    e.t += dt;
+    const k = Math.min(1, e.t / e.dur), s = k * k * (3 - 2 * k);
+    atom.position.lerpVectors(e.from, e.to, s).addScaledVector(e.from.clone().normalize(), -0.12 * Math.sin(Math.PI * k)); // arco para perto da pessoa
+    if (k >= 1) u.emerge = null;
+  }
 }
 
 function removeAtom(atom) {
@@ -611,8 +672,10 @@ function toggleOpen(atom) {
   } else {
     const el = atom.userData.element;
     atom.userData.view = new AtomView(el, atom.userData.state, {
-      describe: (st) => describe(el, st),
+      describe: (st) => describe(atom.userData.element, st), // o elemento pode mudar (decaimento)
       onButton: (what, delta) => changeAtom(atom, what, delta),
+      canDecay: (st) => canDecay(atom.userData.element, st),
+      onDecay: () => decayAtom(atom),
     });
     atom.add(atom.userData.view);
     chemAtom.open = true;
@@ -625,19 +688,19 @@ function toggleOpen(atom) {
 }
 
 // Fase 2: tirar/colocar nêutron ou elétron (as regras da natureza estão em ions.js)
-function changeAtom(atom, what, delta) {
+function changeAtom(atom, what, delta, { fly = true } = {}) {
   const view = atom?.userData.view;
-  if (!view) return;
+  if (!view) return null;
   const el = atom.userData.element;
   const r = change(el, atom.userData.state, what, delta);
   if (!r.ok) {
     toast(r.msg, true);
     buzz([20, 40, 20]);
-    return;
+    return r;
   }
   atom.userData.state = r.state;
   view.setState(r.state);
-  view.fly(what, delta);
+  if (fly) view.fly(what, delta);
   const chemAtom = atom.userData.atom;
   chemAtom.openRadius = view.outer + 0.02;
   chemAtom.charge = el.z - r.state.electrons; // íons ainda não fazem ligações no laboratório
@@ -646,6 +709,40 @@ function changeAtom(atom, what, delta) {
   setActiveOpen(atom);
   buzz(12);
   toast(r.msg, !!r.warn);
+  return r;
+}
+
+// núcleo instável: decai (tempo acelerado) — sai a partícula certa e o átomo pode virar outro elemento
+function decayAtom(atom) {
+  const view = atom?.userData.view;
+  if (!view) return;
+  const r = decay(atom.userData.element, atom.userData.state);
+  if (!r.ok) {
+    toast(r.msg, true);
+    buzz([20, 40, 20]);
+    return;
+  }
+  const chemAtom = atom.userData.atom;
+  atom.userData.element = chemAtom.el = r.el;
+  atom.userData.state = r.state;
+  atom.userData.ball.material.color.set(r.el.color);
+  view.setElement(r.el);
+  view.setState(r.state);
+  view.emit(r.particles);
+  view.setNote(r.detail);
+  chemAtom.openRadius = view.outer + 0.02;
+  chemAtom.charge = r.el.z - r.state.electrons;
+  atom.userData.tag = view.info.tag === r.el.sym ? null : view.info.tag;
+  atom.userData.label.redraw();
+  setActiveOpen(atom);
+  buzz([30, 30, 60]);
+  toast(r.msg, true);
+}
+
+function voiceDecay() {
+  const atom = S?.lastOpen?.userData.view ? S.lastOpen : [...(S?.atoms || [])].reverse().find((a) => a.userData.view);
+  if (!atom) return toast('Abra um átomo primeiro (pinça rápida nele)', true);
+  decayAtom(atom);
 }
 
 // só um átomo aberto mostra o cartão completo (com botões) por vez; os outros mostram só o nome
@@ -695,6 +792,17 @@ function updateBonds(S, q) {
     v.hit.position.copy(mid);
     v.hit.quaternion.copy(quat);
     v.hit.scale.set(sc, visibleLen, sc);
+    if (bond.ionic) {
+      // ligação iônica: não há par de elétrons compartilhado — só a atração entre as cargas (tracejado amarelo)
+      v.sticks.forEach((m, k) => {
+        m.visible = true;
+        m.position.copy(mid).addScaledVector(dir, (k - 1) * visibleLen * 0.33);
+        m.quaternion.copy(quat);
+        m.scale.set(sc * 0.8, visibleLen * 0.18, sc * 0.8);
+      });
+      v.mat.color.set(v.hovered ? 0x4fd1c5 : 0xffd400);
+      return;
+    }
     const side = new THREE.Vector3().crossVectors(dir, view).normalize().multiplyScalar(0.022 * sc);
     const offsets = bond.order === 1 ? [0] : bond.order === 2 ? [-0.5, 0.5] : [-1, 0, 1];
     v.sticks.forEach((m, k) => {
@@ -744,7 +852,9 @@ function updateMoleculeLabels(S, q) {
     item.mol = m || null;
     if (!m) return;
     const info = S.chem.describe(m);
-    const text = info.complete ? `${info.pretty}${info.name ? ` — ${info.name}` : ' — completa'}` : `${info.pretty} · ${info.missing === 1 ? 'falta 1 ligação' : `faltam ${info.missing} ligações`}`;
+    const text = info.complete
+      ? `${info.pretty}${info.name ? ` — ${info.name}` : ' — completa'}${info.ionic ? ' · iônica' : ''}`
+      : info.hint ? `${info.pretty} · ${info.hint}` : `${info.pretty} · ${info.missing === 1 ? 'falta 1 ligação' : `faltam ${info.missing} ligações`}`;
     if (item.label.userData.text !== text) {
       item.label.userData.text = text;
       item.label.redraw(text, info.complete);
@@ -808,6 +918,50 @@ function drawMolLabel(ctx, w, h, text = '', complete = false) {
 
 function flash(atom, color) {
   atom.obj.userData.flash = { color, t: 0.5 };
+}
+
+// a carga mudou no motor químico (ligação iônica): o estado do átomo e o rótulo acompanham (ex.: Na⁺)
+function syncIon(chemAtom) {
+  const atom = chemAtom.obj;
+  const el = atom.userData.element;
+  atom.userData.state = { ...atom.userData.state, electrons: Math.max(0, el.z - (chemAtom.charge || 0)) };
+  const tag = describe(el, atom.userData.state).tag;
+  atom.userData.tag = tag === el.sym ? null : tag;
+  atom.userData.label.redraw();
+}
+
+// aviso da ligação iônica; se o composto ficou completo, diz o nome e lembra que o sólido é um cristal
+function ionicToast(a, b, text) {
+  const info = S.chem.describe(S.chem.molecule(a));
+  const crystal = info.key === 'ClNa' ? 'no sal, cada Na⁺ fica cercado por 6 Cl⁻ num cristal' : 'no sólido, os íons se empilham num cristal, não em moléculas separadas';
+  if (info.complete) toast(`${info.pretty}${info.name ? `, ${info.name}` : ''}: completo! De verdade, ${crystal}`);
+  else toast(text);
+}
+
+// elétron (bolinha azul) voando do metal para o não metal
+function flyElectron(from, to, delay) {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.011, 12, 8), new THREE.MeshStandardMaterial({ color: 0x4fc3ff, emissive: 0x1a6fa0, transparent: true }));
+  mesh.position.copy(from.obj.position);
+  mesh.visible = false;
+  S.scene.add(mesh);
+  S.electronFlyers.push({ mesh, from, to, t: -delay, dur: 0.6 });
+}
+
+function updateElectronFlyers(S, dt) {
+  for (const f of S.electronFlyers) {
+    f.t += dt;
+    const k = THREE.MathUtils.clamp(f.t / f.dur, 0, 1);
+    f.mesh.visible = f.t >= 0;
+    // arco por cima, entre as posições atuais dos dois átomos (eles podem estar se mexendo)
+    f.mesh.position.lerpVectors(f.from.obj.position, f.to.obj.position, k).y += Math.sin(Math.PI * k) * 0.06;
+    if (f.t >= f.dur) flash(f.to, 0x4fc3ff);
+  }
+  for (const f of S.electronFlyers.filter((x) => x.t >= x.dur)) {
+    S.scene.remove(f.mesh);
+    f.mesh.geometry.dispose();
+    f.mesh.material.dispose();
+  }
+  S.electronFlyers = S.electronFlyers.filter((x) => x.t < x.dur);
 }
 
 // vibração do celular (sente-se mesmo dentro do óculos; Android)
@@ -878,10 +1032,12 @@ function updateHands(S, dt) {
   const q = S.head.quaternion;
   const hands = S.hands?.hands || [];
   const k = 1 - Math.exp(-dt * 18); // suaviza entre uma detecção e outra
+  updateTwoHand(S, hands);
   S.handSlots.forEach((slot, i) => {
     const h = hands[i];
     slot.g.visible = !!h;
     if (!h) {
+      slot.aim = null;
       releaseHand(slot);
       return;
     }
@@ -902,6 +1058,16 @@ function updateHands(S, dt) {
     const manip = hit && findManip(hit.object);
     const sel = hit && !manip && findSelectable(hit.object);
     const drag = hit && !manip && !sel && findDraggable(hit.object);
+    // átomo aberto: a mão pode pegar um elétron da camada externa ou o núcleo (um nêutron)
+    const pull = !slot.grab && !manip && !S.twoHand ? findPullTarget(slot.dir, hit) : null;
+    if (pull) {
+      pull.atom.userData.view.hold = 0.3; // as camadas param de girar enquanto a mão mira
+      slot.halo.visible = true;
+      slot.halo.position.copy(pull.pos);
+      slot.halo.scale.setScalar(pull.what === 'e' ? 0.014 : pull.atom.userData.view.rn * pull.atom.userData.atom.scale + 0.01);
+    } else slot.halo.visible = false;
+    // o que esta mão está mirando (para decidir, com as duas em pinça, entre "um átomo em cada mão" e zoom)
+    slot.aim = pull ? pull.atom.userData.atom : sel?.userData.grabbable ? sel.userData.atom : manip?.userData.item?.mol ? manip.userData.item.mol[0] : sel || drag || manip ? 'other' : null;
     const hoverObj = sel || (manip && manip.userData.setHover ? manip : null);
     const end = hit ? hit.point.clone() : slot.dir.clone().multiplyScalar(2.5);
     if (hoverObj !== slot.hover) {
@@ -912,10 +1078,12 @@ function updateHands(S, dt) {
     if (hoverObj) hoverObj.userData.onHoverMove?.(hit);
 
     // pinça: só age no instante em que fecha (1 pinça = 1 clique)
-    const started = h.pinching && !slot.wasPinching;
+    const started = h.pinching && !slot.wasPinching && !S.twoHand;
     slot.wasPinching = h.pinching;
     if (started && !slot.grab) {
-      if (manip && manip.userData.item.mol) {
+      if (pull) {
+        slot.grab = { kind: 'pull', atom: pull.atom, what: pull.what, index: pull.index, origin: pull.pos.clone(), dist: pull.pos.length(), depth0: slot.depth, t0: performance.now(), dir0: slot.dir.clone(), mesh: null, pulled: false };
+      } else if (manip && manip.userData.item.mol) {
         // segurando a molécula inteira (rígida enquanto a pinça estiver fechada)
         const mol = [...manip.userData.item.mol];
         const center = mol.reduce((c, a) => c.add(a.obj.position), new THREE.Vector3()).multiplyScalar(1 / mol.length);
@@ -925,9 +1093,11 @@ function updateHands(S, dt) {
           p0: mol.map((a) => a.obj.position.clone()), s0: mol.reduce((t, a) => t + a.scale, 0) / mol.length,
           right: new THREE.Vector3(1, 0, 0).applyQuaternion(q),
         };
-      } else if (sel?.userData.grabbable) slot.grab = { obj: sel, dist: hit.distance, offset: sel.position.clone().sub(hit.point), depth0: slot.depth, t0: performance.now(), dir0: slot.dir.clone() };
+      } else if (sel?.userData.grabbable) slot.grab = { obj: sel, dist: hit.distance, offset: sel.position.clone().sub(hit.point), depth0: slot.depth, t0: performance.now(), dir0: slot.dir.clone(), viaHandle: !!hit.object.userData.moveHandle };
       else if (sel) {
+        S.selectingSlot = slot; // a tabela usa isto para o átomo já sair na mão
         sel.userData.onSelect?.('mão', hit);
+        S.selectingSlot = null;
         slot.flash = 0.25;
       } else if (drag) {
         const obj = drag.userData.dragTarget;
@@ -935,7 +1105,7 @@ function updateHands(S, dt) {
       }
     }
     // pinça segurada no vazio (sem nada no raio) por ~0,6 s: liga/desliga o zoom nas informações
-    if (h.pinching && !slot.grab && !hit) {
+    if (h.pinching && !slot.grab && !hit && !S.twoHand) {
       slot.voidT = (slot.voidT || 0) + dt;
       if (slot.voidT >= 0.6 && !slot.voidDone) {
         slot.voidDone = true;
@@ -946,7 +1116,11 @@ function updateHands(S, dt) {
       slot.voidT = 0;
       slot.voidDone = false;
     }
-    if (slot.grab?.mol && h.pinching) {
+    if (S.twoHand) {
+      // as duas mãos estão ampliando: nada mais acontece com a pinça
+    } else if (slot.grab?.kind === 'pull' && h.pinching) {
+      updatePull(slot, end);
+    } else if (slot.grab?.mol && h.pinching) {
       const g = slot.grab;
       const az = (v) => Math.atan2(v.x, -v.z);
       const el = (v) => Math.asin(THREE.MathUtils.clamp(v.y, -1, 1));
@@ -969,8 +1143,16 @@ function updateHands(S, dt) {
         });
       }
     } else if (slot.grab && h.pinching) {
+      // tirando da caixinha: conforme a mão puxa o átomo para fora da tabela, ele vem para perto (~65 cm)
+      const g = slot.grab;
+      if (g.fromTable && !g.out) {
+        const pullK = THREE.MathUtils.clamp(slot.dir.angleTo(g.dir0) / 0.2, 0, 1);
+        g.dist = g.dist0 + (Math.min(0.65, g.dist0) - g.dist0) * pullK * (2 - pullK);
+        if (pullK >= 1) g.out = true;
+      }
       // "ímã": segurando um átomo e apontando perto de outro, a profundidade vai até ele
-      if (!slot.grab.panel && !slot.grab.obj.userData.atom.bondedThisGrab) {
+      if (g.fromTable && !g.out) g.obj.userData.atom.intent = null; // ainda saindo da tabela: sem "ímã"
+      else if (!slot.grab.panel && !slot.grab.obj.userData.atom.bondedThisGrab) {
         let best = null;
         const cands = [];
         const held = slot.grab.obj.userData.atom;
@@ -982,12 +1164,12 @@ function updateHands(S, dt) {
           // apontar para qualquer parte de uma molécula = ligar no "lugar livre" dela (o átomo com
           // ligação sobrando mais perto); só há repulsão se a molécula inteira já estiver estável
           let target = a.userData.atom;
-          if (S.chem.free(target) === 0) {
-            const openOnes = S.chem.molecule(target).filter((m) => S.chem.free(m) > 0 && m !== held);
+          if (!S.chem.canJoin(held, target)) {
+            const openOnes = S.chem.molecule(target).filter((m) => m !== held && S.chem.canJoin(held, m));
             if (openOnes.length) target = openOnes.sort((m1, m2) => m1.obj.position.distanceTo(a.position) - m2.obj.position.distanceTo(a.position))[0];
           }
-          const free = S.chem.free(target);
-          cands.push({ along: target.obj.position.dot(slot.dir), perp, atom: target, open: free > 0, free });
+          const free = S.chem.free(target) + S.chem.ionFree(target) + (S.chem.ionicUsed(target) ? S.chem.transferLeft(target) : 0);
+          cands.push({ along: target.obj.position.dot(slot.dir), perp, atom: target, open: !!S.chem.canJoin(held, target), free });
         }
         // abertos primeiro; com mira parecida, prefere quem tem mais ligações livres (o "centro" da molécula)
         const score = (c) => (c.open ? 0 : 10) + c.perp - (c.open ? Math.min(c.free, 3) * 0.012 : 0);
@@ -1011,7 +1193,7 @@ function updateHands(S, dt) {
     slot.ray.geometry.attributes.position.needsUpdate = true;
     slot.ray.material.color.set(slot.grab ? 0xffd400 : sel || drag || manip ? 0xffffff : 0x4fd1c5);
     slot.flash = Math.max(0, slot.flash - dt);
-    const aiming = !!(sel || drag || manip || slot.grab);
+    const aiming = !!(sel || drag || manip || slot.grab || pull);
     const dist = end.length();
     const grow = slot.flash > 0 ? 1.5 : aiming ? 1.2 : 1 + Math.min(1, (slot.voidT || 0) / 0.6) * 1.2;
     slot.reticle.position.copy(end);
@@ -1079,8 +1261,195 @@ function makeHandBeams(onTop) {
   };
 }
 
+// ------------------------------------------------------------ mão: arrancar partículas do átomo aberto
+// Pinçar um elétron da camada externa (ou o núcleo, para um nêutron) e puxar para fora do átomo:
+// passando do limite, a partícula sai (mesmas regras dos botões: energia de ionização, isótopos
+// observados). Solta dentro de outro átomo aberto, ela entra nele (ex.: o elétron do Na vai para o Cl).
+const _v = new THREE.Vector3();
+function findPullTarget(dir, hit) {
+  const hitSel = hit && findSelectable(hit.object);
+  if ((hitSel && !hitSel.userData.grabbable) || hit?.object.userData.moveHandle) return null; // um botão está na frente
+  let best = null;
+  for (const atom of S.atoms) {
+    const view = atom.userData.view;
+    if (!view || !isShown(atom)) continue;
+    view.outerElectrons().forEach((p, i) => {
+      const along = p.dot(dir);
+      if (along < 0.2) return;
+      const perp = p.clone().addScaledVector(dir, -along).length();
+      if (perp < 0.022 && (!hit || along < hit.distance + 0.04) && (!best || perp < best.perp)) best = { atom, what: 'e', index: i, pos: p, perp };
+    });
+    if (!best && hit?.object === view.hit) best = { atom, what: 'n', pos: atom.getWorldPosition(new THREE.Vector3()), perp: 0 };
+  }
+  return best;
+}
+
+function particleMesh(what) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshStandardMaterial({ color: what === 'e' ? 0x4fc3ff : 0xb9c2c8, emissive: what === 'e' ? 0x1a6fa0 : 0x222222, transparent: true }));
+  m.scale.setScalar(what === 'e' ? 0.009 : 0.008);
+  S.scene.add(m);
+  return m;
+}
+
+function updatePull(slot, end) {
+  const g = slot.grab;
+  const point = slot.dir.clone().multiplyScalar(THREE.MathUtils.clamp(g.dist + (slot.depth - g.depth0) * 3, 0.3, 4));
+  end.copy(point);
+  if (!g.mesh && point.distanceTo(g.origin) > 0.015) {
+    // a mão começou a puxar: a partícula sai do lugar (o elétron some do anel)
+    g.mesh = particleMesh(g.what);
+    if (g.what === 'e') g.atom.userData.view.hideElectron(g.index);
+  }
+  if (!g.mesh) return;
+  g.mesh.position.copy(point);
+  if (g.pulled) return;
+  g.atom.userData.view.hold = 0.3;
+  if (point.distanceTo(g.atom.getWorldPosition(_v)) <= reach(g.atom, g.what)) return;
+  const r = changeAtom(g.atom, g.what, -1, { fly: false });
+  if (r?.ok) g.pulled = true;
+  else {
+    cancelPull(g); // a natureza não deixa: a partícula volta para o lugar
+    slot.grab = null;
+  }
+}
+
+// até onde a partícula ainda está "dentro": o elétron, na nuvem de elétrons; o nêutron, perto do núcleo.
+// Vale para sair (puxar além disso) e para entrar (soltar aquém disso, neste ou noutro átomo aberto).
+function reach(atom, what) {
+  const view = atom.userData.view, sc = atom.userData.atom.scale;
+  return what === 'e' ? view.outer * sc + 0.05 : view.rn * sc + 0.06;
+}
+
+function cancelPull(g) {
+  g.atom.userData.view?.showElectron();
+  if (g.mesh) S.loose.push({ mesh: g.mesh, from: g.mesh.position.clone(), to: g.origin.clone(), t: 0, dur: 0.3 });
+}
+
+function dropParticle(g) {
+  const p = g.mesh.position;
+  const target = S.atoms
+    .filter((a) => a.userData.view)
+    .map((a) => ({ a, d: a.getWorldPosition(new THREE.Vector3()).distanceTo(p), r: reach(a, g.what) }))
+    .filter((x) => x.d < x.r)
+    .sort((x, y) => x.d - y.d)[0]?.a;
+  const r = target ? changeAtom(target, g.what, 1, { fly: false }) : null;
+  if (r?.ok) {
+    S.loose.push({ mesh: g.mesh, from: p.clone(), to: target.getWorldPosition(new THREE.Vector3()), t: 0, dur: 0.35 }); // entrou
+    return;
+  }
+  // ninguém pegou: a partícula fica livre e vai embora
+  const away = p.clone().sub(g.atom.getWorldPosition(new THREE.Vector3())).normalize().multiplyScalar(0.5).add(p);
+  S.loose.push({ mesh: g.mesh, from: p.clone(), to: away, t: 0, dur: 1.4 });
+  if (!target) toast(g.what === 'e' ? 'Elétron livre: ele saiu do átomo e ficou solto' : 'Nêutron livre: fora do núcleo, ele decai (meia-vida de cerca de 10 minutos) num próton, um elétron e um antineutrino');
+}
+
+function updateLoose(S, dt) {
+  for (const f of S.loose) {
+    f.t += dt;
+    const k = Math.min(1, f.t / f.dur);
+    f.mesh.position.lerpVectors(f.from, f.to, 1 - (1 - k) ** 2);
+    f.mesh.material.opacity = k > 0.6 ? 1 - (k - 0.6) / 0.4 : 1;
+  }
+  for (const f of S.loose.filter((x) => x.t >= x.dur)) {
+    S.scene.remove(f.mesh);
+    f.mesh.geometry.dispose();
+    f.mesh.material.dispose();
+  }
+  S.loose = S.loose.filter((x) => x.t < x.dur);
+}
+
+// ------------------------------------------------------------ zoom com as duas mãos
+// As duas mãos em pinça: afastar amplia (até 8× num átomo aberto, para ver a estrutura) e aproximar
+// reduz o átomo ou a molécula que está na mão ou para onde as mãos apontam.
+function updateTwoHand(S, hands) {
+  const both = hands.length >= 2 && hands[0].pinching && hands[1].pinching;
+  // o zoom só começa no instante em que uma das pinças fecha (dois átomos segurados que se ligam
+  // no meio do caminho não viram zoom de repente)
+  const prev = S.pinchPrev || [false, false];
+  const justClosed = [0, 1].some((i) => hands[i]?.pinching && !prev[i]);
+  S.pinchPrev = [0, 1].map((i) => !!hands[i]?.pinching);
+  const z = S.twoHand;
+  if (!both) {
+    if (z) {
+      S.twoHand = null;
+      for (const sl of S.handSlots) sl.wasPinching = true; // a mão que continua fechada não "clica" sem querer
+    }
+    return;
+  }
+  const dist = Math.max(hands[0].pinch.distanceTo(hands[1].pinch), 0.02);
+  if (!z) {
+    if (!justClosed) return;
+    const mol = twoHandTarget(S);
+    if (!mol) return; // um átomo em cada mão, um botão, ou nada para ampliar: cada mão continua sozinha
+    for (const sl of S.handSlots) {
+      if (sl.grab?.kind === 'pull') (sl.grab.pulled ? dropParticle : cancelPull)(sl.grab);
+      sl.grab = null;
+      sl.wasPinching = true;
+    }
+    const center = mol.reduce((c, a) => c.add(a.obj.position), new THREE.Vector3()).multiplyScalar(1 / mol.length);
+    const s0 = mol.reduce((t, a) => t + a.scale, 0) / mol.length;
+    S.twoHand = { mol, d0: dist, s0, center, p0: mol.map((a) => a.obj.position.clone()), max: mol.length === 1 && mol[0].open ? 8 : 3, shown: s0 };
+    buzz(15);
+    return;
+  }
+  const s = THREE.MathUtils.clamp(z.s0 * Math.pow(dist / z.d0, 1.5), 0.4, z.max);
+  z.mol.forEach((a, n) => {
+    a.scale = s;
+    a.obj.position.copy(z.p0[n]).sub(z.center).multiplyScalar(s / z.s0).add(z.center);
+  });
+  if (Math.abs(s - z.shown) > 0.15) {
+    z.shown = s;
+    toast(`Zoom ${s.toFixed(1).replace('.', ',')}×${z.max === 8 && s > 2.5 ? ' — veja o núcleo: prótons (vermelho) e nêutrons (cinza)' : ''}`);
+  }
+}
+
+// O que as duas mãos ampliam. Cada mão tem um "assunto": o que ela segura ou para onde aponta.
+//  • átomos/moléculas diferentes → nada de zoom: um átomo em cada mão (dá para encostar um no outro)
+//  • a mesma molécula, ou uma mão com algo e a outra no vazio → amplia essa molécula
+//  • uma das mãos num botão ou painel → nada de zoom
+//  • as duas no vazio → amplia o átomo para onde as mãos apontam (ou o último átomo aberto)
+function twoHandTarget(S) {
+  const subject = (sl) => {
+    const g = sl.grab;
+    if (g?.mol) return g.mol[0];
+    if (g?.obj?.userData.atom) return g.obj.userData.atom;
+    if (g?.kind === 'pull') return g.atom.userData.atom;
+    if (g?.panel) return 'other';
+    return sl.aim || null;
+  };
+  const [a, b] = S.handSlots.map(subject);
+  if (a === 'other' || b === 'other') return null;
+  if (a && b) return S.chem.molecule(a).includes(b) ? S.chem.molecule(a) : null;
+  if (a || b) return S.chem.molecule(a || b);
+  const dirs = S.handSlots.filter((sl) => sl.dir && sl.g.visible).map((sl) => sl.dir);
+  if (dirs.length === 2) dirs.push(dirs[0].clone().add(dirs[1]).normalize()); // o meio entre as mãos
+  let best = null, bestAng = 0.3;
+  for (const a of S.chem.atoms) {
+    for (const d of dirs) {
+      const ang = d.angleTo(a.obj.position);
+      if (ang < bestAng) {
+        bestAng = ang;
+        best = a;
+      }
+    }
+  }
+  if (!best && S.lastOpen?.userData.view) best = S.lastOpen.userData.atom;
+  return best ? S.chem.molecule(best) : null;
+}
+
 function releaseHand(slot) {
   const g = slot.grab;
+  if (g?.kind === 'pull') {
+    const quick = performance.now() - g.t0 < 300 && slot.dir && slot.dir.angleTo(g.dir0) < 0.04;
+    if (g.pulled) dropParticle(g);
+    else {
+      cancelPull(g);
+      if (quick && g.what === 'n') toggleOpen(g.atom); // pinça rápida no núcleo: fecha o átomo (como antes)
+    }
+    slot.grab = null;
+    slot.wasPinching = false;
+    return;
+  }
   // pinça rápida no rótulo (sem arrastar): traz a molécula para perto, à frente da pessoa
   if (g?.kind === 'move' && performance.now() - g.t0 < 350 && slot.dir && slot.dir.angleTo(g.dir0) < 0.04) {
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(S.head.quaternion);
@@ -1091,7 +1460,10 @@ function releaseHand(slot) {
     toast('Molécula trazida para perto');
   }
   // pinça rápida num átomo (sem arrastar): abre/fecha o átomo
-  if (g?.obj?.userData.grabbable && performance.now() - g.t0 < 300 && slot.dir && slot.dir.angleTo(g.dir0) < 0.04) toggleOpen(g.obj);
+  if (g?.fromTable) {
+    // soltou ainda perto da tabela (não "tirou da caixinha"): o átomo vai para a bancada
+    if (g.obj.position.distanceTo(g.fromTable) < 0.1) g.obj.userData.emerge = { from: g.obj.position.clone(), to: benchSpot(g.obj), t: 0, dur: 0.6 };
+  } else if (g?.obj?.userData.grabbable && !g.viaHandle && performance.now() - g.t0 < 300 && slot.dir && slot.dir.angleTo(g.dir0) < 0.04) toggleOpen(g.obj);
   slot.grab = null;
   slot.wasPinching = false;
 }
@@ -1112,15 +1484,18 @@ function frame(dt) {
   updateHands(S, dt);
   S.gaze.update(dt, q, [...S.selectables, ...bondTargets(S)]);
   // química: quem está sendo segurado não se move pela física
-  for (const a of S.chem.atoms) a.held = S.handSlots.some((sl) => sl.grab && (sl.grab.obj === a.obj || sl.grab.mol?.includes(a)));
+  updateEmerging(S, dt);
+  for (const a of S.chem.atoms) a.held = S.handSlots.some((sl) => sl.grab && (sl.grab.obj === a.obj || sl.grab.mol?.includes(a))) || !!S.twoHand?.mol.includes(a) || !!a.obj.userData.emerge;
   S.chem.step(dt);
+  updateElectronFlyers(S, dt);
+  updateLoose(S, dt);
   updateBonds(S, q);
   updateMoleculeLabels(S, q);
   updateToast(S, q, dt);
   S.zoomScale += ((S.zoom ? 1.5 : 1) - S.zoomScale) * Math.min(1, dt * 8);
   for (const box of S.boxes) box.group.scale.setScalar(S.zoomScale);
   S.toast.scale.setScalar(S.zoomScale);
-  for (const a of S.chem.atoms) a.obj.scale.setScalar(a.scale);
+  for (const a of S.chem.atoms) a.obj.scale.setScalar(a.scale * (a.obj.userData.grow ?? 1));
   // rótulos dos átomos e painel de informação viram para a pessoa; brilho de hover e de avisos
   for (const a of S.atoms) {
     a.userData.label.quaternion.copy(q);

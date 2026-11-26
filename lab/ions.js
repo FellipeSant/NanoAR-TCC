@@ -4,6 +4,9 @@
 //  • elétrons: tirar custa a energia de ionização real (e mostra o salto quando se chega numa
 //    camada interna); ganhar elétrons só até o íon negativo mais carregado que o elemento forma
 //    (ex.: Cl⁻, O²⁻, N³⁻) — metais e gases nobres não formam íons negativos estáveis
+//  • decaimento: um núcleo instável se transforma pelo modo real (β⁻, β⁺, captura eletrônica, α…),
+//    emitindo as partículas certas — e o átomo vira outro elemento
+//  • faixa de cargas (oxRange): quantos elétrons cada elemento dá ou recebe numa ligação iônica
 // Este módulo só calcula; o desenho fica em atomview.js e a interação em lab.js.
 
 const NOBLE = { 2: 'hélio', 10: 'neônio', 18: 'argônio', 36: 'criptônio', 54: 'xenônio', 86: 'radônio', 118: 'oganessônio' };
@@ -24,6 +27,17 @@ export async function loadIsotopes(elements, url = new URL('./data/isotopes.json
   return DB;
 }
 export const isotopesReady = () => !!DB;
+
+// cargas que o elemento costuma ter: um metal perde até `max` elétrons (Na +1, Mg +2, Al +3);
+// um não metal ganha até −`min` (Cl −1, O −2, N −3). Sem os dados, usa a valência.
+export function oxRange(el) {
+  const ox = DB?.[el.z]?.ox || [];
+  const pos = ox.filter((v) => v > 0), neg = ox.filter((v) => v < 0);
+  return {
+    max: pos.length ? Math.max(...pos) : el.valence ?? 0,
+    min: neg.length ? Math.min(...neg) : el.ve != null && el.ve >= 4 ? el.ve - 8 : 0,
+  };
+}
 
 export function initialState(el) {
   return { N: el.n ?? 0, electrons: el.z };
@@ -80,6 +94,23 @@ const MODES = {
 };
 const UNBOUND = new Set(['n', '2n', '3n', '4n', 'p', '2p', '3p']);
 
+// o que sai do núcleo em cada modo (para a animação) e a explicação em palavras
+const EMITS = {
+  'B-': ['e-', 'nu'], 'B+': ['e+', 'nu'], 'e+': ['e+', 'nu'], 'EC+B+': ['e+', 'nu'], EC: ['capture', 'nu'], A: ['alpha'],
+  n: ['n'], '2n': ['n', 'n'], '3n': ['n', 'n', 'n'], '4n': ['n', 'n', 'n', 'n'], p: ['p'], '2p': ['p', 'p'], '3p': ['p', 'p', 'p'],
+  'B-n': ['e-', 'nu', 'n'], 'B+p': ['e+', 'nu', 'p'], 'B+A': ['e+', 'nu', 'alpha'], 'B-A': ['e-', 'nu', 'alpha'],
+  '2B-': ['e-', 'e-', 'nu', 'nu'], '2B+': ['e+', 'e+', 'nu', 'nu'],
+};
+const HAPPENED = {
+  'B-': 'decaimento β⁻ — um nêutron virou próton e saiu um elétron (e um antineutrino)',
+  'B+': 'decaimento β⁺ — um próton virou nêutron e saiu um pósitron, a antipartícula do elétron (e um neutrino)',
+  EC: 'captura eletrônica — o núcleo puxou um elétron da camada K, um próton virou nêutron e saiu um neutrino',
+  A: 'decaimento α — saiu uma partícula alfa: 2 prótons e 2 nêutrons, um núcleo de hélio',
+  '2B-': 'duplo β⁻ — dois nêutrons viraram prótons ao mesmo tempo',
+  '2B+': 'duplo β⁺ — dois prótons viraram nêutrons ao mesmo tempo',
+};
+HAPPENED['e+'] = HAPPENED['EC+B+'] = HAPPENED['B+'];
+
 function decayText(z, A, mode) {
   if (!mode) return '';
   if (/SF$/.test(mode)) return ' · fissão espontânea (o núcleo se parte em dois)';
@@ -132,6 +163,51 @@ export function describe(el, state) {
   else rows.push({ text: 'Átomo neutro: prótons = elétrons', color: '#9fb6c1' });
   const tag = `${A !== el.data.a ? sup(A) : ''}${el.sym}${chargeSup(q)}`;
   return { title: `${isotopeName(el, A)}${q ? `  ·  ${el.sym}${chargeSup(q)}` : ''}`, rows, shells, A, q, tag, nuclide: nuc };
+}
+
+// O núcleo decai (com o tempo acelerado): devolve o novo elemento, o novo estado e as partículas emitidas.
+// A carga do átomo é mantida (um átomo neutro continua neutro).
+export function decay(el, state) {
+  if (!DB) return { ok: false, msg: 'Ainda carregando os dados dos isótopos…' };
+  const Z = el.z, A = Z + state.N, nuc = nuclide(Z, A);
+  const name = isotopeName(el, A);
+  if (!nuc) return { ok: false, msg: `${name}: núcleo desconhecido` };
+  if (nuc.stable) return { ok: false, msg: `${name} é estável: não decai` };
+  const mode = nuc.mode;
+  if (!mode) return { ok: false, msg: `${name} é radioativo, mas o modo de decaimento não é conhecido` };
+  if (/SF$/.test(mode)) return { ok: false, msg: `${name} decai por fissão espontânea (o núcleo se parte em dois): isso fica para a reação em cadeia` };
+  let dz, da, emits, what;
+  if (MODES[mode]) {
+    [dz, da] = MODES[mode];
+    emits = EMITS[mode] || [];
+    const k = emits.length;
+    const left = k > 1 ? 'saíram' : 'saiu';
+    what = HAPPENED[mode] || (/^\d?n$/.test(mode) ? `${left} ${count(k, 'nêutron')} do núcleo` : /^\d?p$/.test(mode) ? `${left} ${count(k, 'próton')} do núcleo` : MODES[mode][2]);
+  } else {
+    const cluster = mode.match(/^(\d+)([A-Z][a-z]?)$/); // emissão de um núcleo inteiro (ex.: ¹⁴C)
+    const c = cluster && ELEMENTS.find((e) => e.sym === cluster[2]);
+    if (!c) return { ok: false, msg: `${name}: modo de decaimento "${mode}" ainda não simulado` };
+    dz = -c.z;
+    da = -Number(cluster[1]);
+    emits = [{ kind: 'cluster', p: c.z, n: Number(cluster[1]) - c.z }];
+    what = `saiu um núcleo inteiro de ${c.name.toLowerCase()}-${cluster[1]}`;
+  }
+  const el2 = ELEMENTS[Z + dz - 1];
+  if (!el2) return { ok: false, msg: `${name}: o núcleo-filho não está na tabela` };
+  const q = Z - state.electrons;
+  const next = { N: A + da - el2.z, electrons: Math.max(0, el2.z - q) };
+  const hl = nuc.halfLife;
+  const short = MODES[mode]?.[2] || 'emite um núcleo';
+  const msg = `☢ ${name} → ${isotopeName(el2, A + da).toLowerCase()}${el2.z === Z ? '' : ' (outro elemento!)'} · ${short}${hl ? ` · meia-vida ${fmtTime(hl)}` : ''}`;
+  // explicação mais longa: vai para o cartão do átomo aberto
+  const detail = `${what[0].toUpperCase()}${what.slice(1)}.${hl > 2 ? ` Tempo acelerado: na natureza, metade desses núcleos leva ${fmtTime(hl)} para decair.` : hl ? '' : ' O núcleo se desfaz na hora.'}`;
+  return { ok: true, el: el2, state: next, mode, particles: emits.map((k) => (typeof k === 'string' ? { kind: k } : k)), msg, detail };
+}
+
+// o núcleo atual pode decair? (para mostrar o botão "decair")
+export function canDecay(el, state) {
+  const nuc = nuclide(el.z, el.z + state.N);
+  return !!(nuc && !nuc.stable && nuc.mode);
 }
 
 // ------------------------------------------------------------ mudanças (respeitando a natureza)
